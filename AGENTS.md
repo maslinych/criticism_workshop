@@ -100,3 +100,53 @@ Never fix an LLM output by hand. Never drop a failed item silently.
 - Do not change the selection rule, the annotation guidelines or approved prompts without recording the change, and getting approval where required.
 - Do not let the reviewer step add or rewrite annotations.
 - Do not edit generated data by hand.
+
+## 10. Orientation: commands, code and data
+
+A quick map of the project for coding agents and new contributors. The rules above take precedence.
+
+**Current state.** Stages 1–4 are done: the corpus is built and published as release `corpus-v1.0`, and `uv run ncse fetch` downloads it. The annotation stages are not built yet; `STATUS.md` lists the next steps.
+
+**Commands**
+
+- Setup: `uv sync` (uv installs Python and the exact package versions in `uv.lock`; D-009).
+- Get the corpus: `uv run ncse fetch` (published release), or build it from NCSE with `uv run ncse acquire`, `uv run ncse inspect`, `uv run ncse prepare`.
+- Package a new corpus version: `uv run ncse package` (zip in `dist/`). Publishing (tag, push, GitHub release) is done by the project owner by hand; an agent never publishes (D-019).
+- Tests: `uv run pytest`; one test: `uv run pytest tests/test_rebuild.py::test_page_break_is_noted`. No linter is configured.
+
+**Code layout** (`src/ncse/`)
+
+- `config.yaml` (project root): all paths and settings. `cli.py`: the `ncse` command.
+- `source.py` loads NCSE boxes, joins their labels and marks text invented by the OCR model (`invented.py`, D-017).
+- `rebuild.py` (pure functions, D-016) cuts issues into units at headings and turns them into articles.
+- `inspection.py` and `prepare.py` are stages 2 and 3; `release.py` (package) and `fetch.py` handle the corpus release; `runlog.py` writes run logs with counts to `logs/`.
+
+**NCSE facts the code relies on**
+
+- An NCSE entry is a layout box on a page, not an article.
+- The labels come from separate classification files, joined on `bbox_uid = page_id + "_" + box_page_id`. Topics are multi-label.
+- Only the LDR (*Leader*) and MRP (*Monthly Repository*) issue series are used (D-010, D-011).
+
+**Approval points (✋).** Stop and report to the project owner:
+
+1. after the prepared corpus (approved 2026-11-22);
+2. after drafting the analyst and reviewer prompts and the output format;
+3. after the pilot run (20–30 articles from both periodicals).
+
+Give a request and token cost estimate before the full run.
+
+**Pipeline from here.** 4. analyst LLM → 5. code checks → 6. reviewer LLM → 7. code checks of the reviewer's changes → 8. assemble the CSV and data dictionary → 9. descriptive statistics.
+
+- Each stage reads the previous stage's output, runs with one command and is resumable: paid LLM calls are never redone.
+- Each stage logs the items processed, skipped, failed and retried, and the requests and tokens used.
+- A cheap *sample mode* runs every stage on `corpus_sample/`.
+- The prepared corpus is the only input; quotations are matched against its text files.
+
+**What the validators must enforce** (from `docs/annotation-guidelines.md` and `docs/evidence-and-review.md`)
+
+- **Unit** (D-003): one statement = one target × one criterion × one polarity. Each statement has its own identifier and a shared passage identifier.
+- **Fields:** `quote`, `creator`, `art`, `work_title`, `work_genre`, `evaluative_expression`, `polarity`, `sarcastic`, `criterion`, `quoted_source`, plus evidence levels and assumptions. The final names are fixed in the data dictionary.
+- **Controlled values:** art ∈ {literature, music, theatre, visual art, other}; polarity ∈ {positive, negative}; sarcastic ∈ {yes, no}; criterion ∈ {aesthetic value, moral value, usefulness, novelty, tradition}; evidence ∈ {observed, inferred, suggested}.
+- **Evidence** (D-004): each filled field has a level. *Inferred* and *suggested* need assumptions; the quote is always *observed*. A statement's level is the lowest of its fields.
+- **Quotations:** a quote is a verbatim passage of the article's text file, and `evaluative_expression` occurs inside it. Only documented trivial differences are tolerated (whitespace and line breaks; others are open question Q-5).
+- **Reviewer changes** (D-005): only deleting a field or statement (marked `DELETED`, with a reason) and downgrading a level (observed→inferred, inferred→suggested, observed→suggested, with a reason). Any added statement, changed value, rewritten text or raised level is rejected. Deleted statements stay in the final table.

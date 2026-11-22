@@ -50,7 +50,7 @@ Status: adopted. The approved corpus is published as a versioned release asset (
 Date: 2026-11-22. Status: adopted.
 Decision: the pipeline is written in Python (3.12 or later). Its packages are managed with *uv*, a tool that installs exactly the package versions recorded in `uv.lock`. Libraries: `polars` (reads the NCSE parquet files, a compact table format), `pyyaml` (reads `config.yaml`) and `pytest` (tests). Every stage is started with `uv run ncse <stage>`.
 Reason: Python is the most common programming language in the digital humanities, and uv gives every user the same environment with one command.
-Consequences: commands in `README.md` and `CLAUDE.md`.
+Consequences: commands in `README.md` and `AGENTS.md`.
 
 **D-010 — The Leader: town edition (LDR) only**
 Date: 2026-11-22. Status: adopted (project owner).
@@ -125,6 +125,12 @@ Decision: the corpus was approved at ✋1 on 2026-11-22. It is published as desc
 - `uv run ncse fetch` downloads the zip and checks its SHA-256 checksum. It checks against `release.sha256` in `config.yaml`; until that is filled in after publishing, it checks against the published `.sha256` file. It refuses zips with paths outside their folder, unpacks into `data/corpus/full/` and writes `FETCHED.json`. It does not overwrite an existing corpus unless given `--force`.
 Reason: the tag must point to the code that built the corpus, and the checksum must be checked against a value that cannot change with the download. Publishing is an outward-facing act that cannot be undone (D-008: releases are never replaced), so it stays with the project owner.
 Consequences: the version is set in `config.yaml` (`release.version`). A new corpus version means changing it and packaging again. Tests: `tests/test_release.py` packages the sample corpus and fetches it back without network access.
+
+**D-020 — The main branch is agent-neutral**
+Date: 2026-11-22. Status: adopted (project owner).
+Decision: the `main` branch carries no files for a particular coding agent. All rules and orientation for agents and contributors are in `AGENTS.md`, which many coding agents read, and which now also has a map of the commands, code and data (section 10). Development continues on a separate branch, which may hold agent-specific files (such as `CLAUDE.md`) that are kept out of `main` when changes are merged into it.
+Reason: anyone who clones the repository can use any coding agent, or none.
+Consequences: `CLAUDE.md` was removed from `main` and its general content moved to `AGENTS.md`.
 
 ## Open questions for the project owner
 
