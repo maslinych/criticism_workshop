@@ -327,9 +327,15 @@ def apply_review(analyst_result: dict, actions: list[dict]) -> dict:
 # ---------------------------------------------------------------- feedback
 
 
-def retry_message(errors: list[str]) -> str:
-    """What the model is told after a rejected answer (D-022)."""
+def retry_message(errors: list[str], cut_off: bool = False) -> str:
+    """What the model is told after a rejected answer (D-022).
+
+    After an answer cut off at the length limit, the model is also told that
+    only its beginning was shown and asked not to repeat itself (D-026).
+    """
     lines = "\n".join(f"- {e}" for e in errors)
+    extra = ("Only the beginning of your answer is shown above. Do not write any text outside the JSON "
+             "object and do not repeat yourself.\n" if cut_off else "")
     return ("Your answer was rejected by the automatic checks for these reasons:\n"
-            f"{lines}\n\n"
+            f"{lines}\n\n{extra}"
             "Answer again with the complete, corrected JSON object only, following all the instructions.")

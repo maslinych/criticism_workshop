@@ -158,7 +158,7 @@ Then the code applies the actions. Deleted statements and fields **stay in the d
 
 ## 6. Failures and retries
 
-- When an answer is rejected, the code logs every failed check and asks again, at most `annotation.max_retries` times (`config.yaml`). The new request repeats the original one and adds a short message listing the failed checks (for example "quote of passage 3 not found in the article"), so that the model can correct itself.
+- When an answer is rejected, the code logs every failed check and asks again, at most `annotation.max_retries` times (`config.yaml`). The new request repeats the original one and adds a short message listing the failed checks (for example "quote of passage 3 not found in the article"), so that the model can correct itself. If the answer was cut off at the length limit, only its beginning is sent back (`annotation.retry_echo_chars`, D-026).
 - If the answer still fails after the last retry, the article is marked **failed** for that step, with the reasons. It appears in the stage report and in a list of failed items; it is never dropped silently. Failed articles are not sent to the reviewer.
 - A whole answer is accepted or rejected as a unit. Accepting the good statements of a partly bad answer would make the result depend on the order of checks and hide failures; whether to allow it can be decided after the pilot.
 - Every answer, accepted or not, is stored. A run that is interrupted continues with the articles that have no accepted answer yet; paid requests are never repeated.

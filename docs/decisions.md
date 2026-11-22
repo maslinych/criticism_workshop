@@ -184,6 +184,12 @@ Decision:
 Reason: the owner asked that both steps be checked algorithmically for format and instruction adherence. Saving before checking, and checking saved answers on resume, means a paid answer is never lost or bought twice. Re-checking in a separate command makes stages 5 and 7 runnable on their own and catches any change to the stored data.
 Consequences: code in `src/ncse/checks.py`, `quotes.py`, `prompts.py`, `llm.py`, `annotate.py`, `checkreport.py`, `estimate.py`; tests in `tests/test_checks.py`, `test_prompts.py`, `test_annotate.py`, `test_llm.py` (fake LLM, no network). Not yet run against the real service: the models are not chosen yet.
 
+**D-026 — Retrying an answer that was cut off at the length limit**
+Date: 2026-11-22. Status: adopted.
+Decision: when an answer was cut off at the length limit (`max_tokens`), the retry sends back only its first `annotation.retry_echo_chars` characters (2,000), marked as shortened, and the feedback message adds: "Only the beginning of your answer is shown above. Do not write any text outside the JSON object and do not repeat yourself." Other rejected answers are still sent back whole. The full answer is always kept in the record; the shortened version sent is recorded with the attempt's messages.
+Reason: in the first smoke test (`meta-llama-3.1-8b-instruct`) the model never wrote JSON. It repeated one sentence until it reached the length limit (about 70,000 characters per attempt). The retry sent all of it back, so the request grew from about 5,000 to 21,000 input tokens and the model fell into the same loop again. The beginning is enough to show the model what went wrong. An answer that was not cut off is bounded by `max_tokens`, and the model needs it in full to correct its quotations.
+Consequences: code in `annotate.py` (`StepRunner.echo`) and `checks.retry_message`; tests in `tests/test_annotate.py` and `tests/test_checks.py`.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.

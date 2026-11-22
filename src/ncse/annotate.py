@@ -114,6 +114,7 @@ class StepRunner:
         if self.settings_cfg.get("response_format"):
             self.settings["response_format"] = {"type": self.settings_cfg["response_format"]}
         self.max_attempts = 1 + ann["max_retries"]
+        self.echo_chars = ann["retry_echo_chars"]
         self.prompt = load_prompt(step, self.settings_cfg["prompt_version"])
         self.corpus = corpus_folder(cfg, sample)
         self.version = corpus_version(cfg, sample)
@@ -230,8 +231,9 @@ class StepRunner:
                 return
             messages = list(base)
             if last is not None:
-                messages += [{"role": "assistant", "content": last["raw_response"] or ""},
-                             {"role": "user", "content": checks.retry_message(last["errors"])}]
+                messages += [{"role": "assistant", "content": self.echo(last)},
+                             {"role": "user", "content": checks.retry_message(
+                                 last["errors"], cut_off=last.get("finish_reason") == "length")}]
                 self.count("retries")
             attempt = {"attempt": len(record["attempts"]) + 1, "run_id": self.run_id,
                        "prompt_version": self.prompt.version, "prompt_sha256": self.prompt.sha256,
@@ -263,6 +265,23 @@ class StepRunner:
         save_record(self.out, record)
         self.count("failed")
         self.info(f"{aid}: FAILED after {self.max_attempts} attempts")
+
+    def echo(self, attempt: dict) -> str:
+        """The rejected answer as it is sent back with a retry.
+
+        An answer cut off at the length limit is often the model repeating itself
+        until it ran out of room. Sending all of it back would make the retry
+        long, expensive and likely to repeat the same loop, so only its beginning
+        is sent (`annotation.retry_echo_chars`, D-026). Other answers are sent
+        back whole: they are bounded by max_tokens and the model needs them to
+        correct its quotes.
+        """
+        text = attempt["raw_response"] or ""
+        if attempt.get("finish_reason") != "length" or len(text) <= self.echo_chars:
+            return text
+        return (text[:self.echo_chars]
+                + f"\n\n[… the rest of this answer ({len(text) - self.echo_chars} more characters) is left out: "
+                  "it was cut off at the length limit …]")
 
     def evaluate(self, attempt: dict, text: str, analyst_result: dict | None) -> checks.CheckResult:
         """Run the checks on one stored answer and note the outcome in the attempt."""

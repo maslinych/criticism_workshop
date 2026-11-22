@@ -41,7 +41,10 @@ class FakeClient:
         item = self.answers.pop(0)
         if isinstance(item, Exception):
             raise item
-        return Reply(text=item, finish_reason="stop", usage={"prompt_tokens": 100, "completion_tokens": 10},
+        finish = "stop"
+        if isinstance(item, tuple):  # (text, finish_reason)
+            item, finish = item
+        return Reply(text=item, finish_reason=finish, usage={"prompt_tokens": 100, "completion_tokens": 10},
                      response_id="r", model=model)
 
 
@@ -95,6 +98,28 @@ def test_rejected_answer_is_retried_with_feedback(cfg):
     assert "not a verbatim passage" in retry[3]["content"]
     assert summary["counts"]["retries"] == 1
     assert summary["counts"]["check failed: quote not found"] == 1
+
+
+def test_cut_off_answer_is_sent_back_shortened(cfg):
+    # A model stuck in a loop until the length limit: only the beginning goes back.
+    loop = "The fourth statement is about aesthetic value. " * 2000
+    client = FakeClient([(loop, "length"), good_answer()])
+    analyse(cfg, client)
+    rec = record(cfg)
+    assert rec["status"] == "accepted" and rec["accepted_attempt"] == 2
+    assert rec["attempts"][0]["raw_response"] == loop  # the full answer is still kept
+    echoed = client.requests[1][2]["content"]
+    limit = cfg["annotation"]["retry_echo_chars"]
+    assert echoed.startswith(loop[:limit]) and len(echoed) < limit + 200
+    assert "left out" in echoed
+    feedback = client.requests[1][3]["content"]
+    assert "cut off" in feedback and "do not repeat yourself" in feedback
+
+
+def test_short_cut_off_answer_is_sent_back_whole(cfg):
+    client = FakeClient([('{"passages": [', "length"), good_answer()])
+    analyse(cfg, client)
+    assert client.requests[1][2]["content"] == '{"passages": ['
 
 
 def test_failure_after_all_attempts_is_recorded(cfg):

@@ -301,3 +301,8 @@ def test_apply_review_does_not_modify_input(analysed):
     before = copy.deepcopy(analysed)
     checks.apply_review(analysed, [act()])
     assert analysed == before
+
+
+def test_retry_message_after_cut_off_asks_not_to_repeat():
+    assert "do not repeat yourself" not in checks.retry_message(["one"])
+    assert "do not repeat yourself" in checks.retry_message(["one"], cut_off=True)

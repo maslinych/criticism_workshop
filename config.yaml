@@ -124,6 +124,8 @@ annotation:
     max_tokens: 8000
     response_format: null
   max_retries: 2         # extra attempts after an answer fails the checks
+  retry_echo_chars: 2000 # an answer cut off at the length limit is sent back with the retry
+                         # only up to this many characters (D-026)
   concurrency: 4         # articles sent at the same time
 
 # Connection to the LiteLLM service. Only the NAMES of the environment variables are
