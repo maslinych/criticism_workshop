@@ -11,11 +11,15 @@ version and checksum), the raw answer exactly as returned, the token counts, and
 the result of the checks. The record is saved right after every answer, before
 anything else happens, so a paid answer is never lost.
 
-Each answer is checked at once (checks.py). A rejected answer is retried, at
-most `annotation.max_retries` times, with a message listing what failed. An
-article whose answer is accepted, or that has used up its attempts (failed), is
-done: running the stage again skips it. `--retry-failed` gives failed articles
-a new round of attempts; earlier attempts are kept.
+Each answer is checked at once (checks.py). An answer that is unusable as a
+whole (not a bare JSON object, wrong format, cut off) is rejected and retried,
+at most `annotation.max_retries` times, with a message listing what failed. If
+the model returns exactly the same answer twice in a row, no further attempt is
+made. In an accepted analyst answer, passages and statements that break a rule
+are set aside as failed items, with their reasons, and the rest is kept (D-027).
+An article whose answer is accepted, or that has used up its attempts (failed),
+is done: running the stage again skips it. `--retry-failed` gives failed
+articles a new round of attempts; earlier attempts are kept.
 """
 
 import csv
@@ -30,9 +34,12 @@ from pathlib import Path
 from . import checks
 from .llm import LLMClient, LLMError
 from .prompts import load_prompt
+from .quotes import Tolerance
 from .runlog import RunLog
 
 STEPS = ("analyst", "reviewer")
+REPEATED = ("the model returned exactly the same answer as in the previous attempt, "
+            "so no further attempts were made")
 
 
 # ---------------------------------------------------------------- corpus
@@ -115,6 +122,7 @@ class StepRunner:
             self.settings["response_format"] = {"type": self.settings_cfg["response_format"]}
         self.max_attempts = 1 + ann["max_retries"]
         self.echo_chars = ann["retry_echo_chars"]
+        self.tolerance = Tolerance.from_config(cfg.get("quotes"))
         self.prompt = load_prompt(step, self.settings_cfg["prompt_version"])
         self.corpus = corpus_folder(cfg, sample)
         self.version = corpus_version(cfg, sample)
@@ -184,7 +192,7 @@ class StepRunner:
 
     def check(self, raw: str | None, text: str, analyst_result: dict | None) -> checks.CheckResult:
         if self.step == "analyst":
-            return checks.check_analyst(raw, text, self.prompt.schema)
+            return checks.check_analyst(raw, text, self.prompt.schema, self.tolerance)
         return checks.check_review(raw, analyst_result, self.prompt.schema)
 
     def process(self, art: dict, record: dict | None) -> None:
@@ -223,6 +231,14 @@ class StepRunner:
                 save_record(self.out, record)
             if last is not None and last["accepted"]:
                 self.accept(record, last, text, analyst_result)
+                return
+            if self.repeated(record, round_start):
+                # Asking again would most likely bring the same answer (D-027).
+                record.update(status="failed", errors=[REPEATED] + last["errors"])
+                save_record(self.out, record)
+                self.count("failed")
+                self.count("retries stopped (answer repeated)")
+                self.info(f"{aid}: FAILED: {REPEATED}")
                 return
             if len(record["attempts"]) - round_start >= self.max_attempts:
                 break
@@ -266,6 +282,12 @@ class StepRunner:
         self.count("failed")
         self.info(f"{aid}: FAILED after {self.max_attempts} attempts")
 
+    @staticmethod
+    def repeated(record: dict, round_start: int) -> bool:
+        """Whether the last two answers of this round are exactly the same."""
+        tries = record["attempts"][round_start:]
+        return len(tries) >= 2 and tries[-1].get("raw_response") == tries[-2].get("raw_response")
+
     def echo(self, attempt: dict) -> str:
         """The rejected answer as it is sent back with a retry.
 
@@ -307,6 +329,14 @@ class StepRunner:
         self.count("flags", len(result.flags))
         if self.step == "analyst":
             self.count("statements", checks.statement_count(result.result))
+            for item in result.result["failed"]:
+                self.count(f"failed {item['item']}s")
+                for e in item["errors"]:
+                    self.count(f"item failed: {error_kind(e)}")
+            if result.result["failed"]:
+                self.info(f"{record['article_id']}: accepted; {len(result.result['failed'])} item(s) set aside: "
+                          + "; ".join(item["errors"][0] for item in result.result["failed"][:3])
+                          + (" …" if len(result.result["failed"]) > 3 else ""))
         else:
             self.count("reviewer actions", len(result.answer["actions"]))
 
@@ -339,7 +369,8 @@ class StepRunner:
 
 def error_kind(message: str) -> str:
     """A short category of a check error, for the counts in the log and report."""
-    kinds = [("not a verbatim passage", "quote not found"),
+    kinds = [("not a verbatim passage", "quote not found"), ("does not match any passage", "quote not found"),
+             ("same answer as in the previous attempt", "answer repeated"),
              ("does not occur inside its quote", "expression not in quote"),
              ("needs an assumption", "assumption missing"),
              ("must have assumption null", "assumption on observed claim"),

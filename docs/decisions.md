@@ -139,15 +139,15 @@ Reason: D-008 asks for a raw sample that lets stages 2–3 be tested and underst
 Consequences: 172 boxes on 18 pages, about 320 KB. Articles other than the chosen 12 that appear on the same pages may be cut off at the edge of the copied pages.
 
 **D-022 — Format of the LLM answers, and prompt files**
-Date: 2026-11-22. Status: adopted (approved at ✋2, 2026-11-22).
+Date: 2026-11-22. Status: adopted (approved at ✋2, 2026-11-22); the matching tolerance is replaced by D-028, and acceptance as a whole by D-027.
 Decision:
 - Both LLM steps answer in JSON. Each prompt version is a folder `prompts/<step>/v<N>/` with the instructions (`system.md`), the per-article message (`user.md`) and a JSON schema of the answer (`output.schema.json`). A version is frozen once used in a paid run; changes become a new version. The versions in use are set in `config.yaml` (`annotation`).
 - One request per article; articles are not split. The longest article has about 6,100 words.
 - The analyst returns a list of passages, each with a verbatim quote and the statements resting on it. Each claim field is `{value, evidence, assumption}`; an empty field is `null`.
 - The reviewer returns only a list of actions (statement, field, delete or downgrade, new level, reason). It never repeats the statements, so it cannot rewrite or add anything.
 - Identifiers, quotation positions and statement levels are computed by code (`p01-s02` in LLM messages; `<article ID>-p01-s02` in the data).
-- Quotation matching tolerance: runs of whitespace (spaces, tabs, line breaks) count as one space, and leading and trailing whitespace is ignored. Nothing else is tolerated for now (Q-5 stays open).
-- A rejected answer is retried with a list of the failed checks; after `annotation.max_retries` the article is marked failed for that step. An answer is accepted or rejected as a whole.
+- Quotation matching tolerance: runs of whitespace (spaces, tabs, line breaks) count as one space, and leading and trailing whitespace is ignored. Nothing else is tolerated for now (Q-5 stays open). *Replaced by D-028.*
+- A rejected answer is retried with a list of the failed checks; after `annotation.max_retries` the article is marked failed for that step. An answer is accepted or rejected as a whole. *Replaced by D-027 for the analyst: failed passages and statements are set aside, the rest is accepted.*
 Reason: JSON can be checked by a schema and by code. Grouping statements by passage gives the shared passage identifier of D-003 directly. An action list is the narrowest possible form for the reviewer and makes its limits easy to enforce. Retrying with the reasons lets the model correct a copying error instead of repeating it.
 Consequences: full specification in `docs/output-format.md`. Checking code and tests are written in the next stage.
 
@@ -190,6 +190,29 @@ Decision: when an answer was cut off at the length limit (`max_tokens`), the ret
 Reason: in the first smoke test (`meta-llama-3.1-8b-instruct`) the model never wrote JSON. It repeated one sentence until it reached the length limit (about 70,000 characters per attempt). The retry sent all of it back, so the request grew from about 5,000 to 21,000 input tokens and the model fell into the same loop again. The beginning is enough to show the model what went wrong. An answer that was not cut off is bounded by `max_tokens`, and the model needs it in full to correct its quotations.
 Consequences: code in `annotate.py` (`StepRunner.echo`) and `checks.retry_message`; tests in `tests/test_annotate.py` and `tests/test_checks.py`.
 
+**D-027 — Accepting the good part of an analyst answer; stopping repeated retries**
+Date: 2026-11-22. Status: adopted (project owner, after the smoke tests). Replaces the "accepted or rejected as a whole" rule of D-022 for the analyst.
+Decision:
+- Only problems with the analyst's answer as a whole (empty, not a bare JSON object, repeated keys, cut off, not valid JSON, not matching the schema) reject it and lead to a retry.
+- A passage whose quote cannot be found is set aside together with its statements. A statement that breaks a rule (expression not in its quote, no target, assumption rules, `other` without a note, empty note, wrapped or padded names) is set aside alone. Failed items are stored in the result's `failed` list with their reasons and with what the model wrote, counted in the log and listed in the stage report. The rest of the answer is accepted **without a retry**. Items keep their numbers, so `p04` stays `p04` when `p03` is set aside.
+- If the model returns exactly the same answer as in the previous attempt, no further attempt is made and the article is marked failed with that reason. This is also checked when a stopped run resumes.
+- The reviewer's answer is still accepted or rejected as a whole (D-005: any action outside its limits rejects it). The reviewer sees only accepted statements.
+- Analyst `max_tokens` raised from 8,000 to 32,000 (`config.yaml`).
+- The analyst prompt v1 was changed in two sentences that said the whole response is rejected for any mismatch. They now say that a response in the wrong format is rejected and that a passage or statement breaking a rule is dropped. The version stays `v1` at the owner's request: the change was made before the pilot, after two smoke tests on 2 articles. The records of those tests carry the earlier checksum (`4ed4f3f892da…`); the new text has `2c35cb8b8a00…`. Short smoke tests before the pilot do not freeze a prompt version (`prompts/README.md`).
+Reason: in the second smoke test (`gwdg/qwen3-30b-a3b-instruct-2507`) both articles failed. One answer had 30 statements, of which 2 failed a check, so all 30 were lost. The other model copied its rejected answer unchanged in both retries, so each retry cost a full answer and gained nothing. One article produced 30 statements in about 8,000 output tokens, so 8,000 was too low; the longest article is about 6,100 words. Rule 6 of `AGENTS.md` is kept: no failure is dropped silently, and none is fixed by hand.
+Consequences: code in `checks.check_analyst` and `annotate.py`; the stage report (`ncse check analyst`) gets sections on failed items and on how quotations matched. Tests in `tests/test_checks.py` and `tests/test_annotate.py`. Applied to the smoke-test answers, the new checks would accept 30 of 30 statements of LDR-1851-05-17-011 and 23 of 30 of LDR-1850-11-30-005 (7 without a target).
+
+**D-028 — Quotation matching tolerance (answers Q-5)**
+Date: 2026-11-22. Status: adopted (project owner). Replaces the tolerance of D-022.
+Decision: a quotation, and an evaluative expression within its quotation, is matched at the strictest of three levels that succeeds, and the level is recorded with the passage (`quote_match`) and the statement (`expression_match`):
+- *exact*: only whitespace differs (as in D-022);
+- *normalised*: the same letters and digits in the same order, with all other characters and capitals ignored. This accepts differences in punctuation, the form of quotation marks and dashes, line breaks, hyphenation at line ends and capitals, as long as the words stay the same. Accepted without a flag;
+- *approximate*: a few letters or digits differ (inserted, deleted or replaced), at most `quotes.max_char_errors` = 3 and at most `quotes.max_error_share` = 5% of the letters and digits of the quoted text, so phrases under 20 letters get no allowance. Meant for silently corrected OCR errors and typos. Accepted with a flag (`approximate_quote`, `approximate_expression`).
+
+A normalised or approximate match must start and end at word boundaries in the text. Inside a match, word divisions are not checked ("a part" matches "apart"), because a broken word ("appre-⏎elated") must match the joined one. Whatever the level, the code records the exact source text of the match (`quote_source`, `evaluative_expression_source`), and the dataset uses that text, never the model's copy. The tolerance used is stored with each result, so the re-check (`ncse check analyst`) uses the same values even if `config.yaml` changes later. The "observed but not found" flag also compares at the normalised level. The prompt still asks for verbatim copies.
+Reason: in the smoke test, quotations failed only where the model tidied the text at a break in the corpus: it dropped a stray full stop between two text boxes ("the Minuet.⏎⏎and Saraband"), joined a broken word ("appre-elated"), and left out a semicolon inside quotation marks. None of these changes a word. The word-boundary rule was added after a test showed that "no ground for supposing" would otherwise match "any ground for supposing" with one changed letter, reversing the meaning.
+Consequences: `AGENTS.md` (rule 6 and section 10) updated with the owner's approval. Code in `src/ncse/quotes.py`; settings under `quotes` in `config.yaml`; tests in `tests/test_checks.py`.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.
@@ -200,7 +223,7 @@ Q-1 to Q-3 and Q-7 have provisional answers for the pilot in D-023.
 - **Q-2. Other targets.** How are evaluations of exhibitions, theatres, concerts as events, editions and translations treated?
 - **Q-3. The `other` category for art.** Opera could count as music or theatre, and book illustration as literature or visual art. Which rules apply to such boundary cases, and does `other` stay as a category?
 - **Q-4. Selection beyond the topic label.** *(Answered: D-018.)* Should texts labelled with other topics (e.g. *Religion*, *Education*) that contain reviews be added? If so, how are they identified?
-- **Q-5. Quotation matching tolerances.** Which trivial differences may the quotation check ignore, beyond whitespace and line breaks?
+- **Q-5. Quotation matching tolerances.** *(Answered: D-028.)* Which trivial differences may the quotation check ignore, beyond whitespace and line breaks?
 - **Q-6. Text the OCR model invented.** *(Answered: D-017.)* NCSE v2.0 was read by an image-to-text model, which sometimes adds text that is not on the page: invented newspaper headers (for example "TUESDAY, AUGUST 20, 1861" on an 1851 page), sentences repeated in a loop, and remarks addressed to the user ("Certainly! Below is the extracted table…"). Should such passages be detected and excluded, flagged in the metadata, or left alone? For now they are left in the text unchanged (D-006).
 - **Q-7. Non-fiction books.** Do evaluations of histories, sermons, travels, scientific and scholarly books count, with `art` = `literature`? Provisionally yes (D-023); `work_genre` records the kind of book.
 

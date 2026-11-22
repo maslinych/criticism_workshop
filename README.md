@@ -77,7 +77,7 @@ Each stage reads the output of the previous one and writes its own. Every stage 
 2. **Inspect and select.** Describe the structure of the data, apply the selection rule, rebuild articles, and report what was selected and what problems were found.
 3. **Prepare the corpus.** Write the selected articles out as a **readable corpus**: one plain-text file per article plus a metadata table (see "The prepared corpus" below). This corpus is the only input to annotation. Everything later refers to it, not to the original NCSE files.
 4. **Annotate (analyst).** The LLM proposes evaluative statements following `docs/annotation-guidelines.md` and `docs/evidence-and-review.md`.
-5. **Check.** Scripts verify the analyst's output: correct format, quotations that match the source exactly, and allowed values only.
+5. **Check.** Scripts verify the analyst's output: correct format, quotations that match the source (allowing only differences that leave the words unchanged; the exact source text is kept), and allowed values only.
 6. **Review (reviewer).** A separate LLM call deletes or downgrades statements according to `docs/evidence-and-review.md`.
 7. **Check again.** Scripts verify that the reviewer only made allowed changes.
 8. **Assemble.** Build the final tables and the data dictionary.
@@ -131,7 +131,7 @@ export LITELLM_API_KEY=<your key>
 |---|---|---|
 | Models | `uv run ncse models` | lists the model names the service offers, to put into `config.yaml` |
 | Estimate | `uv run ncse estimate` | prints the expected number of requests and tokens; no requests |
-| 4. Analyst | `uv run ncse analyse` | sends each article to the analyst; every answer is checked at once and retried if rejected; `data/annotation/full/analyst/<article>.json` |
+| 4. Analyst | `uv run ncse analyse` | sends each article to the analyst; every answer is checked at once and retried if unusable as a whole; passages and statements that fail a check are set aside; `data/annotation/full/analyst/<article>.json` |
 | 5. Check | `uv run ncse check analyst` | checks all stored analyst answers again, no requests; `reports/03-analyst-checks.md` |
 | 6. Reviewer | `uv run ncse review` | sends each analysed article to the reviewer, checked the same way; `data/annotation/full/reviewer/<article>.json` |
 | 7. Check again | `uv run ncse check reviewer` | checks all reviewer answers again, no requests; `reports/04-review-checks.md` |
@@ -139,7 +139,8 @@ export LITELLM_API_KEY=<your key>
 - **Sample mode:** add `--sample` to any of these commands to work on the 24 articles of `corpus_sample/` instead; results go to `data/annotation/sample/` and the reports get `-sample` in their names.
 - **Smaller runs:** `--limit 5` processes at most 5 articles; `--articles LDR-1851-05-17-011 MRP-1822-03-02-001` only the named ones.
 - **Interrupted runs:** run the same command again. Finished articles are skipped, and an answer that was received is never requested again.
-- **Failed articles** (still rejected after `annotation.max_retries` retries) are listed in the log and the report. `--retry-failed` gives them a new round of attempts.
+- **Failed articles** (still rejected after `annotation.max_retries` retries, or after the model repeated the same answer) are listed in the log and the report. `--retry-failed` gives them a new round of attempts.
+- **Failed items:** passages and statements of an accepted answer that fail a check are kept in the record with their reasons and listed in the report, but do not enter the data (D-027).
 - Each answer, accepted or not, is kept exactly as the model returned it. What the checks do is described in `docs/output-format.md`.
 
 Later stages (assembly, statistics) will be added here as they are built.

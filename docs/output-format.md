@@ -70,26 +70,45 @@ An article without evaluations gives `{"passages": []}`. This is a valid, expect
 
 ## 3. What the code checks in the analyst's answer
 
-A check either **rejects** the answer (it is retried, section 6) or **flags** a statement (the statement is kept, and the flag goes into the table and the report).
+A check has one of three outcomes (D-027):
 
-**Rejected:**
+- it **rejects** the whole answer, which is then retried (section 6);
+- it **sets aside** one passage or statement as a *failed item*: the item is kept in the record with its reasons, but it does not enter the data, and the rest of the answer is accepted without a retry;
+- it **flags** a statement or passage: the item is kept, and the flag goes into the table and the report.
+
+**Rejected (the whole answer):**
 
 1. **Instruction adherence** (D-025): the answer is empty; is not a bare JSON object (text before or after it, or Markdown code fences); gives a key twice in one object; or was cut off because it reached the length limit.
 2. The answer is not valid JSON, or does not match the schema: missing or extra fields, values outside the allowed lists, wrong types.
-3. A `quote` is not a passage of the article's text file. The comparison ignores only differences in **whitespace**: runs of spaces, tabs and line breaks count as one space, and spaces at the start and end are ignored (D-022). Every other difference, including curly versus straight quotation marks, is a mismatch (open question Q-5).
-4. An `evaluative_expression` does not occur inside its `quote`, with the same tolerance.
+
+**Set aside (one passage, with all its statements):**
+
+3. A `quote` cannot be found in the article's text file. The matching (D-028) tries three levels and records which one succeeded:
+   - *exact*: the same characters; runs of spaces, tabs and line breaks count as one space, and spaces at the start and end are ignored;
+   - *normalised*: the same letters and digits in the same order, ignoring all other characters and capital letters. This tolerates differences in punctuation, the form of quotation marks and dashes, line breaks, words broken by a hyphen at a line end, and capitals, as long as the words stay the same;
+   - *approximate*: as *normalised*, but a few letters or digits may differ, as when the model corrects an OCR error ("patricians" for "patriicians") or makes a typo. At most `quotes.max_char_errors` (3) may differ, and at most `quotes.max_error_share` (5%) of the letters and digits of the quote, so a phrase under 20 letters must match without any error. The passage is accepted and flagged (item 14).
+
+   A normalised or approximate match must begin and end at word boundaries in the text, so that a changed letter cannot turn "any ground" into "no ground". Whatever the level, the code records the exact text of the article that the quote matched (`quote_source`); this, not the model's copy, is the quotation in the data.
+
+**Set aside (one statement):**
+
+4. An `evaluative_expression` cannot be found inside the source text of its quote, with the same three levels (item 15 flags approximate ones). The exact source text of the expression is recorded.
 5. An `inferred` or `suggested` claim has no assumption, or an `observed` claim has one.
 6. A statement has none of `creator`, `work_title`, `work_genre` (no target).
 7. `art` is `other` and `note` is empty, or `note` is an empty text (it must be `null` or say something).
 8. A name, title, genre or quoted source has spaces at its start or end, or is wrapped as a whole in quotation marks or underscores (the prompt asks to leave them out; a closing mark that is part of the name, as in `the Author of “Waverley.”`, is fine).
 
+Failed items keep their numbers: if passage `p03` is set aside, the next accepted passage is still `p04`, so every item can be traced back to the raw answer.
+
 **Flagged:**
 
-9. **Observed but not found.** A free-text claim (`creator`, `work_title`, `work_genre`, `quoted_source`) marked `observed` whose value does not occur anywhere in the article text, ignoring whitespace and capital letters. This catches, for example, a name the model has silently corrected or completed. (It cannot be checked for `art`, `polarity`, `sarcastic` and `criterion`, whose values are categories, not words of the text.)
+9. **Observed but not found.** A free-text claim (`creator`, `work_title`, `work_genre`, `quoted_source`) marked `observed` whose value does not occur anywhere in the article text, at the *normalised* level (letters and digits only, capitals ignored). This catches, for example, a name the model has silently corrected or completed. (It cannot be checked for `art`, `polarity`, `sarcastic` and `criterion`, whose values are categories, not words of the text.)
 10. **Repeated quote.** Two passages with the same quotation.
 11. **Repeated statement.** Two statements identical in every field.
 12. **Passage order.** A passage that lies earlier in the article than the one before it (the prompt asks for article order).
 13. **Ambiguous quote.** A quotation that occurs more than once in the article. The first occurrence is recorded.
+14. **Approximate quote.** A quotation that matched with a few changed characters (item 3). The detail gives the number of characters and the source text.
+15. **Approximate expression.** The same for an evaluative expression.
 
 ## 4. What the code adds
 
@@ -100,6 +119,9 @@ The LLM never numbers, counts or locates anything (`AGENTS.md`, section 5). The 
 | `passage_id` | `LDR-1852-12-11-003-p02` | article identifier + passage number, in the order of the analyst's answer |
 | `statement_id` | `LDR-1852-12-11-003-p02-s01` | passage identifier + statement number within the passage |
 | `quote_start`, `quote_end` | `1234`, `1410` | position of the quotation in the text file, in characters from the start |
+| `quote_source`, `evaluative_expression_source` | | the exact text of the article at that position (D-028) |
+| `quote_match`, `quote_char_errors`, `expression_match` | `normalised`, `0` | how the model's copy matched the text: `exact`, `normalised` or `approximate`, and how many characters differ |
+| failed items | | passages and statements set aside, with the reasons and what the model wrote (section 3) |
 | statement evidence level | `inferred` | the lowest level among the statement's claims (D-004) |
 | run information | | corpus version, model, model settings, prompt version, date and time of the request, numbers of tokens |
 
@@ -159,15 +181,16 @@ Then the code applies the actions. Deleted statements and fields **stay in the d
 ## 6. Failures and retries
 
 - When an answer is rejected, the code logs every failed check and asks again, at most `annotation.max_retries` times (`config.yaml`). The new request repeats the original one and adds a short message listing the failed checks (for example "quote of passage 3 not found in the article"), so that the model can correct itself. If the answer was cut off at the length limit, only its beginning is sent back (`annotation.retry_echo_chars`, D-026).
-- If the answer still fails after the last retry, the article is marked **failed** for that step, with the reasons. It appears in the stage report and in a list of failed items; it is never dropped silently. Failed articles are not sent to the reviewer.
-- A whole answer is accepted or rejected as a unit. Accepting the good statements of a partly bad answer would make the result depend on the order of checks and hide failures; whether to allow it can be decided after the pilot.
+- If the model returns exactly the same answer as in the previous attempt, no further attempt is made: the article is marked failed at once (D-027).
+- If the answer still fails after the last retry, the article is marked **failed** for that step, with the reasons. It appears in the stage report and in a list of failed articles; it is never dropped silently. Failed articles are not sent to the reviewer.
+- Only problems with the whole answer lead to a retry. Failed passages and statements (section 3) are set aside without a retry (D-027): asking again costs a full answer, and in the smoke tests the model did not correct such items when asked. Each failed item is kept in the record with its reasons and listed in the stage report; it is never dropped silently. The reviewer sees only the accepted statements.
 - Every answer, accepted or not, is stored. A run that is interrupted continues with the articles that have no accepted answer yet; paid requests are never repeated.
 
 ## 7. The final statements table (draft)
 
-`statements.csv`, one row per statement, deleted statements included. The final column names and descriptions are fixed in the data dictionary at stage 8; this is the intended shape.
+`statements.csv`, one row per statement, deleted statements included. Failed items (section 3) are not statements of the dataset; they are listed separately, with their reasons. The final column names and descriptions are fixed in the data dictionary at stage 8; this is the intended shape.
 
-- **Identity and source:** `statement_id`, `passage_id`, `article_id`, `periodical`, `issue_date`, `quote`, `quote_start`, `quote_end`, `evaluative_expression`.
+- **Identity and source:** `statement_id`, `passage_id`, `article_id`, `periodical`, `issue_date`, `quote` (the exact source text, `quote_source`), `quote_start`, `quote_end`, `quote_match`, `evaluative_expression` (exact source text).
 - **For each claim field** (`creator`, `art`, `work_title`, `work_genre`, `polarity`, `sarcastic`, `criterion`, `quoted_source`), five columns, for example for `creator`:
   - `creator`: the value;
   - `creator_evidence`: the level after review;

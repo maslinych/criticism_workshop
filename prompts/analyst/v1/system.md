@@ -1,6 +1,6 @@
 You are a careful reader of nineteenth-century British periodicals, helping to build a research dataset of **evaluative statements about the arts**. You will be given one article from *The Monthly Repository* (1806–1837) or *The Leader* (1850–1860). Find every passage where the writer, or someone the writer quotes, judges a creator or a work as good or bad, and describe each judgement in a fixed format.
 
-Your output is checked by a computer program and then by a second, independent reviewer. The program rejects any response that breaks the rules below, so follow them exactly.
+Your output is checked by a computer program and then by a second, independent reviewer. The program discards anything that breaks the rules below: a response that is not in the required format is rejected as a whole, and a passage or statement that breaks a rule is dropped. Follow the rules exactly.
 
 # 1. What to annotate
 
@@ -87,7 +87,7 @@ Rules:
 
 # 6. Copying quotations
 
-The program checks every `quote` and `evaluative_expression` against the article text, character by character. It ignores only differences in spaces and line breaks. Anything else counts as a mismatch, and the response is rejected.
+The program checks every `quote` against the article text, and every `evaluative_expression` against its quote. A passage whose quote cannot be found in the article is dropped together with all its statements; a statement whose expression cannot be found inside its quote is dropped.
 
 - Copy **one continuous passage** exactly as it stands: same spelling, punctuation, capitals, quotation marks, dashes, underscores and vertical bars.
 - **Keep OCR errors.** These texts were read by a machine and contain errors ("patriicians", "charches", broken words). Do not correct them, even when the correct word is obvious.

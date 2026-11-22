@@ -7,7 +7,7 @@ import pytest
 
 from ncse import checks
 from ncse.prompts import load_prompt
-from ncse.quotes import contains, find_all, normalize
+from ncse.quotes import Tolerance, contains, contains_loose, find_all, match, normalize
 
 ANALYST_SCHEMA = load_prompt("analyst", "v1").schema
 REVIEWER_SCHEMA = load_prompt("reviewer", "v1").schema
@@ -37,15 +37,21 @@ def answer(*statements, quote=QUOTE):
     return {"passages": [{"quote": quote, "statements": list(statements) or [statement()]}]}
 
 
-def analyse(obj, text=TEXT):
+def analyse(obj, text=TEXT, tolerance=Tolerance()):
     raw = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False)
-    return checks.check_analyst(raw, text, ANALYST_SCHEMA)
+    return checks.check_analyst(raw, text, ANALYST_SCHEMA, tolerance)
+
+
+def item_errors(check):
+    """The reasons of all items set aside in an accepted answer (D-027)."""
+    assert check.ok, check.errors  # an item failure never rejects the whole answer
+    return [e for item in check.result["failed"] for e in item["errors"]]
 
 
 # ------------------------------------------------------------ quotation matching
 
 
-def test_quote_matching_tolerates_only_whitespace():
+def test_exact_matching_tolerates_only_whitespace():
     assert find_all(TEXT, QUOTE)  # line break in the text, space in the quote
     assert find_all(TEXT, "  laborious   and\ttedious ")
     assert not find_all(TEXT, "laborious and tedious performance,")  # punctuation differs
@@ -57,6 +63,58 @@ def test_quote_matching_tolerates_only_whitespace():
 def test_quote_positions_point_into_the_original_text():
     (start, end), = find_all(TEXT, "laborious and tedious")
     assert TEXT[start:end] == "laborious and\ntedious"
+
+
+def test_normalised_match_ignores_punctuation_capitals_and_line_breaks():
+    for quote in ["laborious and tedious performance,",           # punctuation differs
+                  "the finest sacred work of the age,\" a judgement",  # quotation mark changed
+                  "mr. hartley's",                                 # capitals differ
+                  "MR HARTLEY’S NEW ORATORIO"]:                    # all of it
+        m = match(TEXT, quote)
+        assert m and m.level == "normalised" and m.char_errors == 0, quote
+    text = "known and appre-\n\nelated all over Europe.\n\nand so on"
+    m = match(text, "known and appre-elated all over Europe and so")  # broken word, stray full stop
+    assert m and m.level == "normalised"
+    assert text[m.start:m.end] == "known and appre-\n\nelated all over Europe.\n\nand so"
+
+
+def test_source_span_keeps_punctuation_the_quote_has():
+    m = match(TEXT, "a laborious and tedious performance;")
+    assert m.level == "exact"
+    m = match(TEXT, "A laborious and tedious performance;")
+    assert m.level == "normalised" and TEXT[m.start:m.end] == "a laborious and\ntedious performance;"
+    m = match(TEXT, "the finest sacred work of the age,\"")
+    assert TEXT[m.start:m.end] == "the finest sacred work of the age,'"
+
+
+def test_approximate_match_allows_a_few_changed_characters():
+    m = match(TEXT, "The patricians applauded.")  # OCR error "corrected": one letter less
+    assert m and m.level == "approximate" and m.char_errors == 1
+    assert TEXT[m.start:m.end] == "The patriicians applauded."
+    m = match(TEXT, QUOTE.replace("laborious", "labourious").replace("concur", "concurr"))
+    assert m and m.level == "approximate" and m.char_errors == 2
+    # different words are not "a few characters"
+    assert match(TEXT, "The plebeians applauded.") is None
+    assert match(TEXT, QUOTE.replace("laborious and tedious", "brilliant and moving")) is None
+
+
+def test_approximate_limit_depends_on_length():
+    tol = Tolerance(max_char_errors=3, max_error_share=0.05)
+    assert [tol.allowed(n) for n in (10, 19, 20, 40, 60, 500)] == [0, 0, 1, 2, 3, 3]
+    assert match(TEXT, "laborous and tedious") is None  # 18 letters: no error allowed
+    assert match(TEXT, "The patricians applauded.", Tolerance(max_char_errors=0)) is None
+
+
+def test_loose_matches_must_start_and_end_at_word_boundaries():
+    text = "Nor was there any ground for supposing that."
+    assert match(text, "no ground for supposing") is None  # would be "ny ground" with one change
+    assert match(text, "NY ground for supposing") is None  # normalised level, starts mid-word
+    assert match(text, "Any ground for supposing").level == "normalised"
+
+
+def test_contains_loose():
+    assert contains_loose(TEXT, "Mr Hartley")
+    assert not contains_loose(TEXT, "John Hartley")
 
 
 def test_normalize_maps_characters_back():
@@ -83,11 +141,30 @@ def test_valid_answer_is_accepted_with_identifiers_and_positions():
     assert TEXT[p["quote_start"]:p["quote_end"]].replace("\n", " ") == QUOTE
     assert [s["statement_id"] for s in p["statements"]] == ["p01-s01", "p01-s02"]
     assert [s["evidence"] for s in p["statements"]] == ["observed", "inferred"]
+    assert p["quote_match"] == "exact" and p["quote_source"] == TEXT[p["quote_start"]:p["quote_end"]]
+    assert p["statements"][0]["evaluative_expression_source"] == "laborious and\ntedious"
+    assert check.result["failed"] == []
+    assert check.result["quote_tolerance"] == {"max_char_errors": 3, "max_error_share": 0.05}
+
+
+def test_tidied_quote_is_accepted_with_its_source_text():
+    check = analyse(answer(statement(evaluative_expression="Laborious and Tedious"),
+                           quote=QUOTE.replace("'", "\u2019").upper()))
+    p = check.result["passages"][0]
+    assert p["quote_match"] == "normalised" and not check.flags
+    assert p["quote_source"].replace("\n", " ") == QUOTE
+    assert p["statements"][0]["expression_match"] == "normalised"
+
+
+def test_approximate_quote_is_accepted_with_a_flag():
+    check = analyse(answer(quote=QUOTE.replace("laborious", "labourious")))
+    assert check.ok and check.result["passages"][0]["quote_match"] == "approximate"
+    assert [f["flag"] for f in check.flags] == ["approximate_quote"]
 
 
 def test_empty_answer_list_is_valid():
     check = analyse({"passages": []})
-    assert check.ok and check.result == {"passages": []}
+    assert check.ok and check.result["passages"] == [] and check.result["failed"] == []
 
 
 # ------------------------------------------------------------ analyst: instruction adherence
@@ -118,52 +195,65 @@ def test_schema_violations_are_rejected():
     assert not analyse(answer(statement(art=None))).ok  # art is always filled
 
 
-def test_quote_not_in_text_is_rejected():
-    check = analyse(answer(quote=QUOTE.replace("laborious", "labourious")))
-    assert any("not a verbatim passage" in e for e in check.errors)
+def test_passage_with_unmatched_quote_is_set_aside_with_its_statements():
+    good = {"quote": "The patriicians applauded.",
+            "statements": [statement(evaluative_expression="applauded")]}
+    bad = {"quote": QUOTE.replace("laborious and tedious", "brilliant and moving"),
+           "statements": [statement(), statement(polarity=claim("positive"))]}
+    check = analyse({"passages": [bad, good]})
+    assert check.ok
+    assert [p["passage_id"] for p in check.result["passages"]] == ["p02"]  # numbering keeps its place
+    failed, = check.result["failed"]
+    assert failed["where"] == "p01" and failed["item"] == "passage" and failed["statements"] == 2
+    assert "does not match any passage" in failed["errors"][0]
+    assert failed["answer"] == bad  # what the model wrote is kept
 
 
-def test_expression_outside_quote_is_rejected():
-    check = analyse(answer(statement(evaluative_expression="patriicians applauded")))
-    assert any("does not occur inside its quote" in e for e in check.errors)
+def test_expression_outside_quote_fails_the_statement_only():
+    check = analyse(answer(statement(), statement(evaluative_expression="patriicians applauded")))
+    assert any("does not occur inside its quote" in e for e in item_errors(check))
+    assert [s["statement_id"] for s in check.result["passages"][0]["statements"]] == ["p01-s01"]
+    assert check.result["failed"][0]["where"] == "p01-s02"
 
 
 def test_assumption_rules():
     no_assumption = answer(statement(criterion=claim("aesthetic value", "inferred", None)))
-    assert any("needs an assumption" in e for e in analyse(no_assumption).errors)
+    assert any("needs an assumption" in e for e in item_errors(analyse(no_assumption)))
     blank = answer(statement(creator=claim("Mr. Hartley", "suggested", "  ")))
-    assert any("needs an assumption" in e for e in analyse(blank).errors)
+    assert any("needs an assumption" in e for e in item_errors(analyse(blank)))
     observed_with = answer(statement(polarity=claim("negative", "observed", "because")))
-    assert any("must have assumption null" in e for e in analyse(observed_with).errors)
+    assert any("must have assumption null" in e for e in item_errors(analyse(observed_with)))
 
 
 def test_statement_needs_a_target():
     check = analyse(answer(statement(creator=None, work_title=None, work_genre=None)))
-    assert any("no target" in e for e in check.errors)
+    assert any("no target" in e for e in item_errors(check))
+    assert check.result["passages"][0]["statements"] == []
 
 
 def test_art_other_needs_a_note():
-    assert any("note must explain" in e for e in analyse(answer(statement(art=claim("other")))).errors)
-    assert analyse(answer(statement(art=claim("other"), note="A masque: music and drama."))).ok
-    assert any("non-empty" in e for e in analyse(answer(statement(note=""))).errors)
+    assert any("note must explain" in e for e in item_errors(analyse(answer(statement(art=claim("other"))))))
+    assert not item_errors(analyse(answer(statement(art=claim("other"), note="A masque: music and drama."))))
+    assert any("non-empty" in e for e in item_errors(analyse(answer(statement(note="")))))
 
 
 def test_names_must_be_written_without_wrapping_marks():
     check = analyse(answer(statement(work_title=claim("_The Deluge_"))))
-    assert any("without the surrounding" in e for e in check.errors)
+    assert any("without the surrounding" in e for e in item_errors(check))
     check = analyse(answer(statement(creator=claim(" Mr. Hartley"))))
-    assert any("spaces at its start" in e for e in check.errors)
+    assert any("spaces at its start" in e for e in item_errors(check))
     # a closing quotation mark that belongs to the name is fine
     text = "By the Author of “The Curate.” A tedious book."
     st = statement(creator=claim("the Author of “The Curate.”"), evaluative_expression="tedious",
                    work_title=None, work_genre=claim("book"), art=claim("literature"))
-    assert analyse(answer(st, quote="A tedious book."), text=text).ok
+    assert not item_errors(analyse(answer(st, quote="A tedious book."), text=text))
 
 
 # ------------------------------------------------------------ analyst: flags
 
 
 def test_observed_value_not_in_text_is_flagged_not_rejected():
+    assert not analyse(answer(statement(creator=claim("Mr Hartley")))).flags  # punctuation ignored
     check = analyse(answer(statement(creator=claim("John Hartley"))))
     assert check.ok
     assert [f["flag"] for f in check.flags] == ["observed_not_found"]
@@ -200,7 +290,7 @@ def analysed():
                     polarity=claim("positive"), quoted_source=claim("a contemporary"),
                     work_genre=claim("oratorio", "inferred", "Said so in the heading."))
     check = analyse(answer(statement(), st2))
-    assert check.ok
+    assert check.ok and not check.result["failed"]
     return check.result
 
 

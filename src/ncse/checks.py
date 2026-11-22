@@ -6,14 +6,21 @@ docs/output-format.md, sections 3 and 5.2:
 - the answer must be a bare JSON object, as the prompts instruct (no text or
   Markdown fences around it, no repeated keys);
 - it must match the JSON schema of its prompt version;
-- the analyst's quotations must be verbatim passages of the article, and each
-  evaluative expression must lie inside its quotation;
+- the analyst's quotations must match passages of the article, and each
+  evaluative expression must lie inside its quotation (quotes.py: exact,
+  normalised or, with a flag, approximate; D-028);
 - the evidence rules must hold (assumptions for inferred and suggested claims);
 - the reviewer may only delete or downgrade, within the limits of D-024.
 
-A check either produces an *error* (the answer is rejected and the request is
-retried) or a *flag* (the answer is accepted, and the flag is kept with the
-data for inspection).
+A check produces one of three outcomes (D-027):
+- an *error*: the answer as a whole is unusable (not a bare JSON object, wrong
+  format; for the reviewer, any action outside its limits). The answer is
+  rejected and the request is retried;
+- a *failed item* (analyst only): one passage or statement breaks a rule. It is
+  set aside, with its reasons, in the result's `failed` list; the rest of the
+  answer is accepted;
+- a *flag*: the item is accepted, and the flag is kept with the data for
+  inspection.
 
 All functions here are pure: they take text and return results, and never call
 the LLM or touch files, so that they can be tested directly.
@@ -25,7 +32,7 @@ from dataclasses import dataclass, field
 
 import jsonschema
 
-from .quotes import contains, find_all, squeeze
+from .quotes import Match, Tolerance, contains_loose, match, squeeze
 
 CLAIM_FIELDS = ["creator", "art", "work_title", "work_genre", "polarity",
                 "sarcastic", "criterion", "quoted_source"]
@@ -121,12 +128,21 @@ def statement_level(statement: dict, skip_deleted: bool = False) -> str:
 # ---------------------------------------------------------------- analyst
 
 
-def check_analyst(raw: str | None, text: str, schema: dict) -> CheckResult:
+def check_analyst(raw: str | None, text: str, schema: dict,
+                  tolerance: Tolerance = Tolerance()) -> CheckResult:
     """Check one analyst answer for one article (stage 5).
 
-    `text` is the article's text file, unchanged. On success, `result` holds the
-    passages with short identifiers (p01, p01-s01), quotation positions and the
-    statement levels."""
+    `text` is the article's text file, unchanged. Problems with the answer as a
+    whole (not a bare JSON object, wrong format) are *errors*: the answer is
+    rejected. Problems with one passage or statement do not reject the answer
+    (D-027): the item is set aside in `result["failed"]` with its reasons, and
+    the rest is accepted. A passage whose quote is not found fails with all its
+    statements.
+
+    `result["passages"]` holds the accepted passages with short identifiers
+    (p01, p01-s01) numbered over the whole answer, so that failed items keep
+    their place; the position and exact source text of each quote and
+    evaluative expression; how they matched (D-028); and the statement levels."""
     check = CheckResult()
     obj = parse_answer(raw, check)
     if obj is None:
@@ -136,28 +152,34 @@ def check_analyst(raw: str | None, text: str, schema: dict) -> CheckResult:
     if check.errors:
         return check
 
-    passages = []
+    passages, failed = [], []
     seen_quotes: dict[str, str] = {}
     seen_statements: dict[str, str] = {}
     previous_start = -1
     for pi, passage in enumerate(obj["passages"], start=1):
         pid = f"p{pi:02d}"
         quote = passage["quote"]
-        hits = find_all(text, quote)
-        if not hits:
-            check.errors.append(f"passage {pid}: the quote is not a verbatim passage of the article "
-                                f"(copy it exactly, with OCR errors and punctuation): \"{_short(quote)}\"")
-            start, end = None, None
-        else:
-            start, end = hits[0]
-            if len(hits) > 1:
-                check.flags.append({"where": pid, "flag": "ambiguous_quote",
-                                    "detail": f"the quote occurs {len(hits)} times; the first is recorded"})
-            if start < previous_start:
-                check.flags.append({"where": pid, "flag": "passage_order",
-                                    "detail": "passage comes before the previous one in the article"})
-            previous_start = start
-        key = squeeze(quote)
+        found = match(text, quote, tolerance)
+        if found is None:
+            failed.append({"where": pid, "item": "passage", "statements": len(passage["statements"]),
+                           "errors": [f"passage {pid}: the quote does not match any passage of the article, "
+                                      "even allowing for punctuation, capitals, line breaks and a few "
+                                      f"changed characters: \"{_short(quote)}\""],
+                           "answer": passage})
+            continue
+        source = text[found.start:found.end]
+        if found.count > 1:
+            check.flags.append({"where": pid, "flag": "ambiguous_quote",
+                                "detail": f"the quote occurs {found.count} times; the first is recorded"})
+        if found.level == "approximate":
+            check.flags.append({"where": pid, "flag": "approximate_quote",
+                                "detail": f"{found.char_errors} character(s) differ from the article: "
+                                          f"\"{_short(source)}\""})
+        if found.start < previous_start:
+            check.flags.append({"where": pid, "flag": "passage_order",
+                                "detail": "passage comes before the previous one in the article"})
+        previous_start = found.start
+        key = squeeze(source)
         if key in seen_quotes:
             check.flags.append({"where": pid, "flag": "repeated_quote",
                                 "detail": f"same quote as {seen_quotes[key]}"})
@@ -166,60 +188,76 @@ def check_analyst(raw: str | None, text: str, schema: dict) -> CheckResult:
         statements = []
         for si, st in enumerate(passage["statements"], start=1):
             sid = f"{pid}-s{si:02d}"
-            _check_statement(st, sid, quote, text, check)
             st_key = json.dumps(st, sort_keys=True)
             if st_key in seen_statements:
                 check.flags.append({"where": sid, "flag": "repeated_statement",
                                     "detail": f"identical to {seen_statements[st_key]}"})
             seen_statements.setdefault(st_key, sid)
-            statements.append({"statement_id": sid, **st, "evidence": statement_level(st)})
-        passages.append({"passage_id": pid, "quote": quote, "quote_start": start,
-                         "quote_end": end, "statements": statements})
+            errors, expr = _check_statement(st, sid, source, text, tolerance, check)
+            if errors:
+                failed.append({"where": sid, "item": "statement", "errors": errors, "answer": st})
+                continue
+            statements.append({"statement_id": sid, **st,
+                               "evaluative_expression_source": source[expr.start:expr.end],
+                               "expression_match": expr.level, "evidence": statement_level(st)})
+        passages.append({"passage_id": pid, "quote": quote, "quote_source": source,
+                         "quote_start": found.start, "quote_end": found.end,
+                         "quote_match": found.level, "quote_char_errors": found.char_errors,
+                         "statements": statements})
 
-    if not check.errors:
-        check.result = {"passages": passages}
+    check.result = {"passages": passages, "failed": failed, "quote_tolerance": tolerance.as_dict()}
     return check
 
 
-def _check_statement(st: dict, sid: str, quote: str, text: str, check: CheckResult) -> None:
+def _check_statement(st: dict, sid: str, source: str, text: str, tolerance: Tolerance,
+                     check: CheckResult) -> tuple[list[str], Match | None]:
+    """The reasons why one statement fails (empty if it passes), and where its
+    evaluative expression lies in the quote's source text."""
+    errors = []
     expr = st["evaluative_expression"]
-    if not contains(quote, expr):
-        check.errors.append(f"statement {sid}: the evaluative expression \"{_short(expr, 50)}\" "
-                            "does not occur inside its quote exactly as written")
+    found = match(source, expr, tolerance)
+    if found is None:
+        errors.append(f"statement {sid}: the evaluative expression \"{_short(expr, 50)}\" "
+                      "does not occur inside its quote")
+    elif found.level == "approximate":
+        check.flags.append({"where": sid, "flag": "approximate_expression",
+                            "detail": f"{found.char_errors} character(s) differ from the article: "
+                                      f"\"{_short(source[found.start:found.end], 50)}\""})
     if all(st[name] is None for name in ("creator", "work_title", "work_genre")):
-        check.errors.append(f"statement {sid}: no target: at least one of creator, work_title "
-                            "and work_genre must be filled")
+        errors.append(f"statement {sid}: no target: at least one of creator, work_title "
+                      "and work_genre must be filled")
     if st["art"]["value"] == "other" and _blank(st["note"]):
-        check.errors.append(f"statement {sid}: art is 'other', so note must explain why")
+        errors.append(f"statement {sid}: art is 'other', so note must explain why")
     if isinstance(st["note"], str) and not st["note"].strip():
-        check.errors.append(f"statement {sid}: note must be null or a non-empty text")
+        errors.append(f"statement {sid}: note must be null or a non-empty text")
     for name in CLAIM_FIELDS:
         claim = st[name]
         if claim is None:
             continue
         level, assumption = claim["evidence"], claim["assumption"]
         if level == "observed" and assumption is not None:
-            check.errors.append(f"statement {sid}, {name}: an observed claim must have assumption null")
+            errors.append(f"statement {sid}, {name}: an observed claim must have assumption null")
         if level != "observed" and _blank(assumption):
-            check.errors.append(f"statement {sid}, {name}: an {level} claim needs an assumption")
+            errors.append(f"statement {sid}, {name}: an {level} claim needs an assumption")
         if name in FREE_FIELDS:
             value = claim["value"]
             if value != value.strip():
-                check.errors.append(f"statement {sid}, {name}: the value has spaces at its start or end")
+                errors.append(f"statement {sid}, {name}: the value has spaces at its start or end")
             elif any(value.startswith(a) and value.endswith(b) and len(value) > 1 for a, b in WRAPPERS):
-                check.errors.append(f"statement {sid}, {name}: write \"{_short(value, 40)}\" without "
-                                    "the surrounding quotation marks or underscores")
-            if level == "observed" and not contains(text, value, ignore_case=True):
+                errors.append(f"statement {sid}, {name}: write \"{_short(value, 40)}\" without "
+                              "the surrounding quotation marks or underscores")
+            if level == "observed" and not contains_loose(text, value):
                 check.flags.append({"where": sid, "flag": "observed_not_found",
                                     "detail": f"{name} \"{_short(value, 40)}\" is marked observed "
                                               "but does not occur in the article"})
+    return errors, found
 
 
 def reviewer_input(analyst_result: dict) -> str:
     """The analyst's statements as shown to the reviewer: the analyst's own
     fields plus short identifiers, nothing else (evidence-and-review.md, 5)."""
     shown = {"passages": [
-        {"passage_id": p["passage_id"], "quote": p["quote"],
+        {"passage_id": p["passage_id"], "quote": p["quote_source"],
          "statements": [
              {"statement_id": s["statement_id"],
               "evaluative_expression": s["evaluative_expression"],

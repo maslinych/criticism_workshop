@@ -26,7 +26,8 @@ def good_answer():
         "quoted_source": None, "note": None}]}]})
 
 
-BAD_QUOTE = good_answer().replace("eternally fresh!", "eternaly fresh!")
+NOT_BARE = "Here is the annotation:\n" + good_answer()  # unusable as a whole: rejected and retried
+UNMATCHED = good_answer().replace("household words", "a story told by an idiot")  # one passage fails
 
 
 class FakeClient:
@@ -88,16 +89,39 @@ def test_accepted_answer_is_stored_with_provenance(cfg):
 
 
 def test_rejected_answer_is_retried_with_feedback(cfg):
-    client = FakeClient([BAD_QUOTE, good_answer()])
+    client = FakeClient([NOT_BARE, good_answer()])
     summary = analyse(cfg, client)
     rec = record(cfg)
     assert rec["status"] == "accepted" and rec["accepted_attempt"] == 2
     assert not rec["attempts"][0]["accepted"]
     retry = client.requests[1]
-    assert retry[2] == {"role": "assistant", "content": BAD_QUOTE}
-    assert "not a verbatim passage" in retry[3]["content"]
+    assert retry[2] == {"role": "assistant", "content": NOT_BARE}
+    assert "single JSON object" in retry[3]["content"]
     assert summary["counts"]["retries"] == 1
-    assert summary["counts"]["check failed: quote not found"] == 1
+    assert summary["counts"]["check failed: text around JSON"] == 1
+
+
+def test_failed_items_are_set_aside_without_a_retry(cfg):
+    client = FakeClient([UNMATCHED])
+    summary = analyse(cfg, client)
+    rec = record(cfg)
+    assert len(client.requests) == 1
+    assert rec["status"] == "accepted" and rec["result"]["passages"] == []
+    failed, = rec["result"]["failed"]
+    assert failed["where"] == "p01" and "does not match any passage" in failed["errors"][0]
+    assert summary["counts"]["failed passages"] == 1
+    assert summary["counts"]["item failed: quote not found"] == 1
+    # the stored result is what the re-check produces
+    checkreport.run(cfg, "analyst", sample=True)
+
+
+def test_same_answer_twice_stops_the_retries(cfg):
+    client = FakeClient(["not json", "not json", good_answer()])
+    summary = analyse(cfg, client)
+    rec = record(cfg)
+    assert len(client.requests) == 2
+    assert rec["status"] == "failed" and "same answer" in rec["errors"][0]
+    assert summary["counts"]["retries stopped (answer repeated)"] == 1
 
 
 def test_cut_off_answer_is_sent_back_shortened(cfg):
@@ -123,7 +147,7 @@ def test_short_cut_off_answer_is_sent_back_whole(cfg):
 
 
 def test_failure_after_all_attempts_is_recorded(cfg):
-    client = FakeClient(["not json"] * 3)
+    client = FakeClient(["not json", "not JSON", "{not json"])
     summary = analyse(cfg, client)
     rec = record(cfg)
     assert rec["status"] == "failed" and len(rec["attempts"]) == 3
@@ -159,7 +183,7 @@ def test_answer_saved_but_not_checked_is_checked_on_resume(cfg):
 
 
 def test_interrupted_round_continues_where_it_stopped(cfg):
-    client = FakeClient([BAD_QUOTE, LLMError("quota exceeded")])
+    client = FakeClient([NOT_BARE, LLMError("quota exceeded")])
     summary = analyse(cfg, client)
     assert summary["counts"]["stopped early"] == 1
     rec = record(cfg)

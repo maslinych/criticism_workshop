@@ -115,7 +115,7 @@ annotation:
     prompt_version: v1
     model: null          # to be chosen with the project owner
     temperature: 0
-    max_tokens: 8000
+    max_tokens: 32000
     response_format: json_object
   reviewer:
     prompt_version: v1
@@ -127,6 +127,16 @@ annotation:
   retry_echo_chars: 2000 # an answer cut off at the length limit is sent back with the retry
                          # only up to this many characters (D-026)
   concurrency: 4         # articles sent at the same time
+
+# Matching quotations against the article text (D-028, src/ncse/quotes.py).
+# A quote matches exactly (only whitespace differs), or normalised (same letters and
+# digits; punctuation, quotation marks, line breaks, hyphens and capitals ignored), or
+# approximately: up to max_char_errors letters or digits differ, and at most
+# max_error_share of the quote's letters and digits. Approximate matches are accepted
+# with a flag (typos, OCR errors the model corrected).
+quotes:
+  max_char_errors: 3
+  max_error_share: 0.05
 
 # Connection to the LiteLLM service. Only the NAMES of the environment variables are
 # here; set them in your shell, e.g. export LITELLM_BASE_URL=https://.../v1

@@ -21,6 +21,7 @@ from . import checks
 from .annotate import (corpus_folder, error_kind, load_articles, load_record, output_folder,
                        read_text, result_sha256)
 from .prompts import load_prompt
+from .quotes import Tolerance
 from .runlog import RunLog
 
 
@@ -36,7 +37,9 @@ def recheck(record: dict, text: str, analyst_result: dict | None) -> list[str]:
         attempt = record["attempts"][record["accepted_attempt"] - 1]
         schema = load_prompt(record["step"], attempt["prompt_version"]).schema
         if record["step"] == "analyst":
-            result = checks.check_analyst(attempt["raw_response"], text, schema)
+            # the tolerance the answer was checked with is stored in the result (D-028)
+            tolerance = Tolerance.from_config((record["result"] or {}).get("quote_tolerance"))
+            result = checks.check_analyst(attempt["raw_response"], text, schema, tolerance)
         else:
             result = checks.check_review(attempt["raw_response"], analyst_result, schema)
         if not result.ok:
@@ -73,6 +76,7 @@ def run(cfg: dict, step: str, sample: bool = False) -> None:
     fields = {name: Counter() for name in checks.CLAIM_FIELDS}
     st_level, actions, deleted_reasons = Counter(), Counter(), Counter()
     failed_articles = []
+    item_failures, quote_match, failed_items = Counter(), Counter(), []
     n_statements = n_passages = n_deleted = 0
 
     for art in articles:
@@ -110,8 +114,13 @@ def run(cfg: dict, step: str, sample: bool = False) -> None:
         versions[f"{record.get('model')} / prompt {record.get('prompt_version')}"] += 1
         for f in record["flags"]:
             flags[f["flag"]] += 1
+        for item in record["result"].get("failed", []):
+            item_failures[f"{item['item']}: {error_kind(item['errors'][0])}"] += 1
+            failed_items.append((aid, item))
         for p in record["result"]["passages"]:
             n_passages += 1
+            if "quote_match" in p:
+                quote_match[p["quote_match"]] += 1
             for s in p["statements"]:
                 n_statements += 1
                 by_periodical[art["periodical"]] += 1
@@ -150,11 +159,26 @@ def run(cfg: dict, step: str, sample: bool = False) -> None:
               "Attempts per article:", "", *_table(attempts_hist, ("attempts", "articles")), "",
               "Model and prompt of the accepted answers:", "", *_table(versions, ("model / prompt", "articles")), "",
               "## Failed checks (all attempts)", "",
-              "A failed check makes the code reject the answer and ask again.", "",
+              "These checks concern an answer as a whole: a failed check makes the code reject the answer "
+              "and ask again. For the analyst, they also include the failed items of rejected answers "
+              "(set aside, not retried; D-027).", "",
               *_table(failed_checks, ("check", "times")), ""]
     if failed_articles:
         lines += ["## Failed articles", ""]
         lines += [f"- `{aid}`: {'; '.join(errs[:3])}" for aid, errs in failed_articles] + [""]
+    if step == "analyst":
+        lines += ["## Failed items in accepted answers", "",
+                  "A passage whose quote does not match the article, or a statement that breaks a rule, is set "
+                  "aside with its reasons; the rest of the answer is kept (D-027). A failed passage takes its "
+                  "statements with it. Counted by the first reason.", "",
+                  *_table(item_failures, ("item: reason", "times")), ""]
+        if failed_items:
+            lines += [f"- `{aid}` {item['where']}: {'; '.join(item['errors'])}" for aid, item in failed_items] + [""]
+        lines += ["## How quotations matched the article", "",
+                  "exact = only whitespace differs; normalised = same letters and digits (punctuation, "
+                  "quotation marks, line breaks, hyphens, capitals ignored); approximate = a few characters "
+                  "differ, flagged (D-028).", "",
+                  *_table(quote_match, ("match", "passages"), n_passages), ""]
     lines += ["## Flags on accepted answers", "",
               "Flags do not reject an answer; they mark statements to look at.", "",
               *_table(flags, ("flag", "times")), ""]

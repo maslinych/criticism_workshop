@@ -66,16 +66,17 @@ Never ask the LLM to count, sort, convert formats or check its own output format
 Every response from the LLM is checked by code before it is accepted.
 
 - **Format.** The response has the agreed structure, all required fields are present, and controlled fields use only the allowed values.
-- **Fidelity to the source.** Every quotation is a verbatim passage of the source text, meaning the article's text file in the prepared corpus. Paraphrases, "tidied" quotations, corrected OCR errors and text that does not exist in the source are rejected. The evaluative word or phrase must occur inside its quotation.
-  - The matching may ignore only trivial differences such as whitespace and line breaks. These tolerances must be written down in `docs/decisions.md`.
+- **Fidelity to the source.** Every quotation must match a passage of the source text, meaning the article's text file in the prepared corpus. Paraphrases and text that does not exist in the source are rejected. The evaluative word or phrase must occur inside its quotation.
+  - The matching may ignore only trivial differences that leave the words unchanged: whitespace, line breaks, punctuation, the form of quotation marks, hyphenation and capitals. A few changed characters (a corrected OCR error, a typo) are accepted but flagged. These tolerances are written down in `docs/decisions.md` (D-028).
+  - The dataset always uses the exact source text that a quotation matched, never the model's copy. The source texts are never corrected.
 - **Consistency with evidence levels.** A value marked as *observed* (directly stated) should be findable in the text. If it is not, the statement is flagged.
 - **Reviewer limits.** The reviewer's output is compared with the analyst's. Any change other than an allowed deletion or downgrade is rejected (see `docs/evidence-and-review.md`).
 
 **When a check fails:**
 
 1. Log the failure.
-2. Retry the request a limited number of times.
-3. If it still fails, mark the item as failed and report it.
+2. If the response as a whole is unusable (wrong format), retry the request a limited number of times. A passage or statement that fails a check is set aside as a failed item, and the rest of the response is accepted (D-027).
+3. If the response still fails, mark the article as failed and report it. Report failed items too.
 
 Never fix an LLM output by hand. Never drop a failed item silently.
 
@@ -152,5 +153,5 @@ Give a request and token cost estimate before the full run.
 - **Fields:** `quote`, `creator`, `art`, `work_title`, `work_genre`, `evaluative_expression`, `polarity`, `sarcastic`, `criterion`, `quoted_source`, plus evidence levels and assumptions. The final names are fixed in the data dictionary.
 - **Controlled values:** art ∈ {literature, music, theatre, visual art, other}; polarity ∈ {positive, negative}; sarcastic ∈ {yes, no}; criterion ∈ {aesthetic value, moral value, usefulness, novelty, tradition}; evidence ∈ {observed, inferred, suggested}.
 - **Evidence** (D-004): each filled field has a level. *Inferred* and *suggested* need assumptions; the quote is always *observed*. A statement's level is the lowest of its fields.
-- **Quotations:** a quote is a verbatim passage of the article's text file, and `evaluative_expression` occurs inside it. Only documented trivial differences are tolerated (whitespace and line breaks; others are open question Q-5).
+- **Quotations:** a quote matches a passage of the article's text file, and `evaluative_expression` occurs inside it. Matching is exact, normalised (punctuation, quotation marks, line breaks, hyphenation, capitals ignored) or approximate (a few changed characters, flagged); the exact source text is recorded (D-028). A failed passage or statement is set aside, not the whole answer (D-027).
 - **Reviewer changes** (D-005): only deleting a field or statement (marked `DELETED`, with a reason) and downgrading a level (observed→inferred, inferred→suggested, observed→suggested, with a reason). Any added statement, changed value, rewritten text or raised level is rejected. Deleted statements stay in the final table.
