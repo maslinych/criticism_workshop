@@ -75,7 +75,7 @@ Each stage reads the output of the previous one and writes its own. Every stage 
 
 1. **Acquire.** Download the NCSE v2.0 files and record where they came from, when, and their checksums.
 2. **Inspect and select.** Describe the structure of the data, apply the selection rule, rebuild articles, and report what was selected and what problems were found.
-3. **Prepare.** Turn the selected articles into units of annotation, with stable identifiers.
+3. **Prepare the corpus.** Write the selected articles out as a **readable corpus**: one plain-text file per article plus a metadata table (see "The prepared corpus" below). This corpus is the only input to annotation. Everything later refers to it, not to the original NCSE files.
 4. **Annotate (analyst).** The LLM proposes evaluative statements following `docs/annotation-guidelines.md` and `docs/evidence-and-review.md`.
 5. **Check.** Scripts verify the analyst's output: correct format, quotations that match the source exactly, and allowed values only.
 6. **Review (reviewer).** A separate LLM call deletes or downgrades statements according to `docs/evidence-and-review.md`.
@@ -83,9 +83,31 @@ Each stage reads the output of the previous one and writes its own. Every stage 
 8. **Assemble.** Build the final tables and the data dictionary.
 9. **Describe.** Produce summary statistics.
 
+## The prepared corpus
+
+Data preparation produces a corpus that people can read and check without any special tools. It has two parts:
+
+- **A folder of plain-text files (`.txt`), one per article.**
+  - Each file holds the text of the article as rebuilt from the NCSE entries, in reading order, with the OCR text left unchanged.
+  - The file name is the article's identifier, which also appears in the metadata table.
+  - The text files contain only text, no metadata headers. That way, quotations in the annotations can be checked directly against the file contents.
+- **`metadata.csv`, one row per article.** Required columns:
+  - article identifier and file name;
+  - periodical;
+  - issue date, volume and number where available;
+  - page(s);
+  - article heading or title, if any;
+  - length (e.g. words and characters);
+  - the NCSE labels used for selection (text type, topic);
+  - the identifiers of the NCSE entries the article was built from, so that every article can be traced back to the original edition.
+
+Any notes about how an article was rebuilt, such as entries merged across a page break or an uncertain heading, are recorded in the metadata as well.
+
+The corpus is a deliverable in its own right. It can be read, sampled and shared (with attribution to NCSE) independently of the annotations. It is also the single, fixed input to all later stages: annotations refer to articles by their identifier and quote the text of these files.
+
 ## Expected outputs
 
-- **Articles table.** One row per selected article: source identifiers, periodical, issue date, heading, length, and the labels used for selection.
+- **The prepared corpus.** The folder of article text files and `metadata.csv` (see above).
 - **Statements table.** One row per evaluative statement. It holds all the fields defined in the annotation guidelines, the evidence levels and assumptions, the reviewer's decision, and a link to its article. Statements deleted by the reviewer stay in the table, marked as deleted with the reason, so that the review step itself can be studied.
 - **Data dictionary.** A plain-language description of every column and its allowed values.
 - **Summary statistics.** For example:
@@ -109,7 +131,7 @@ Annotation runs through the university's **LiteLLM** service, which offers an Op
 
 Work proceeds in this order. Steps marked ✋ need the project owner's approval before continuing.
 
-1. Analyse the data structure and report findings, including what an entry is and how well the selection rule works. ✋
+1. Analyse the data structure and report findings, including what an entry is and how well the selection rule works. Build the prepared corpus and present a sample of article files with their metadata rows. ✋
 2. Draft the prompts for the analyst and the reviewer, and the exact output format. ✋
 3. Write the scripts that run the LLM steps and check their output, together with automated tests.
 4. Run a pilot on a small sample (e.g. 20–30 articles from both periodicals) and present the results for inspection. ✋

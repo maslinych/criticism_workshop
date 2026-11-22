@@ -32,7 +32,7 @@ Technical choices (languages, libraries, file layout, internal formats) are your
 - **Resumable.** If a run stops halfway, through a crash, a network error or a quota limit, running it again continues where it stopped. Finished work, and above all paid LLM calls, is never redone unless explicitly requested.
 - **Provenance.** It must always be possible to trace where every piece of data came from:
   - source files: origin, download date and checksum;
-  - every article: its source file and identifiers in the original edition;
+  - every article in the prepared corpus: its source file and the identifiers of the NCSE entries it was built from, recorded in `metadata.csv`;
   - every annotation: the article, the exact passage, the model, the model settings, the prompt version and the date of the run;
   - the raw LLM responses: kept, so that any processed result can be checked against what the model actually returned.
 
@@ -63,7 +63,7 @@ Never ask the LLM to count, sort, convert formats or check its own output format
 Every response from the LLM is checked by code before it is accepted.
 
 - **Format.** The response has the agreed structure, all required fields are present, and controlled fields use only the allowed values.
-- **Fidelity to the source.** Every quotation is a verbatim passage of the source text. Paraphrases, "tidied" quotations, corrected OCR errors and text that does not exist in the source are rejected. The evaluative word or phrase must occur inside its quotation.
+- **Fidelity to the source.** Every quotation is a verbatim passage of the source text, meaning the article's text file in the prepared corpus. Paraphrases, "tidied" quotations, corrected OCR errors and text that does not exist in the source are rejected. The evaluative word or phrase must occur inside its quotation.
   - The matching may ignore only trivial differences such as whitespace and line breaks. These tolerances must be written down in `docs/decisions.md`.
 - **Consistency with evidence levels.** A value marked as *observed* (directly stated) should be findable in the text. If it is not, the statement is flagged.
 - **Reviewer limits.** The reviewer's output is compared with the analyst's. Any change other than an allowed deletion or downgrade is rejected (see `docs/evidence-and-review.md`).
@@ -80,7 +80,7 @@ Never fix an LLM output by hand. Never drop a failed item silently.
 
 - **Automated tests:**
   - for the scripts, e.g. the quotation matcher;
-  - for the integrity of the generated data: unique identifiers, every statement linked to an existing article, only allowed values in controlled fields, no empty required fields.
+  - for the integrity of the generated data: unique identifiers, exactly one text file for every row of `metadata.csv` and the reverse, every statement linked to an existing article, only allowed values in controlled fields, no empty required fields.
 - **Logging.** Every run writes a log of what it did: items processed, skipped, failed and retried, plus the number of requests and tokens used.
 - **Statistics after each stage.** Report how many texts were selected, how many statements were produced, how many failed checks, and how many were deleted or downgraded by the reviewer. Unexpected numbers are often the first sign of a problem.
 

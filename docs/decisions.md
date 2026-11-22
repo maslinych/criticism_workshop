@@ -33,6 +33,9 @@ Status: adopted. Reason: see `evidence-and-review.md`, section 5. Requiring a re
 **D-006 — Source text is never corrected; quotations reproduce OCR errors**
 Status: adopted. Reason: quotations are checked by code against the source text, and corrections would break traceability.
 
+**D-007 — A readable prepared corpus as the fixed input to annotation**
+Status: adopted. Data preparation writes one plain-text file per article, containing text only, plus a `metadata.csv` with one row per article, including the NCSE entry identifiers each article was built from. All later stages read only this corpus. Reason: people can read and check the corpus without special tools, quotations can be verified against simple text files, and the corpus can be shared or reused independently of the annotations.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.
