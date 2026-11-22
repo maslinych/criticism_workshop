@@ -105,7 +105,7 @@ Never fix an LLM output by hand. Never drop a failed item silently.
 
 A quick map of the project for coding agents and new contributors. The rules above take precedence.
 
-**Current state.** Stages 1–4 are done: the corpus is built and published as release `corpus-v1.0`, `uv run ncse fetch` downloads it, and `raw_sample/` lets stages 2–3 run and be tested without the download. The annotation stages are not built yet; `STATUS.md` lists the next steps.
+**Current state.** Stages 1–4 are done: the corpus is built and published as release `corpus-v1.0`, `uv run ncse fetch` downloads it, and `raw_sample/` lets stages 2–3 run and be tested without the download. Prompts and output format are approved (✋2). The annotation stages 4–7 are built and tested with a fake LLM, but not yet run against the real service; `STATUS.md` lists the next steps.
 
 **Commands**
 
@@ -113,6 +113,7 @@ A quick map of the project for coding agents and new contributors. The rules abo
 - Get the corpus: `uv run ncse fetch` (published release), or build it from NCSE with `uv run ncse acquire`, `uv run ncse inspect`, `uv run ncse prepare`.
 - Refresh the raw NCSE sample (`raw_sample/`, test data for stages 2–3): `uv run ncse sample-raw` (needs the download).
 - Package a new corpus version: `uv run ncse package` (zip in `dist/`). Publishing (tag, push, GitHub release) is done by the project owner by hand; an agent never publishes (D-019).
+- Annotation: `uv run ncse estimate`, `uv run ncse analyse`, `uv run ncse check analyst`, `uv run ncse review`, `uv run ncse check reviewer`; add `--sample` for sample mode. Needs `LITELLM_BASE_URL` and `LITELLM_API_KEY` and model names in `config.yaml`.
 - Tests: `uv run pytest`; one test: `uv run pytest tests/test_rebuild.py::test_page_break_is_noted`. No linter is configured.
 
 **Code layout** (`src/ncse/`)
@@ -121,6 +122,7 @@ A quick map of the project for coding agents and new contributors. The rules abo
 - `source.py` loads NCSE boxes, joins their labels and marks text invented by the OCR model (`invented.py`, D-017).
 - `rebuild.py` (pure functions, D-016) cuts issues into units at headings and turns them into articles.
 - `prompts/<step>/v<N>/` (project root): prompt texts and the JSON schema of each answer (D-022); the format is specified in `docs/output-format.md`.
+- `checks.py` (pure functions) checks both LLM steps' answers; `quotes.py` matches quotations; `annotate.py` runs the analyst and reviewer (records in `data/annotation/`, resumable); `checkreport.py` re-checks stored answers and writes reports; `llm.py` is the LiteLLM client; `prompts.py` loads prompt versions; `estimate.py` estimates cost.
 - `inspection.py` and `prepare.py` are stages 2 and 3; `rawsample.py` draws the raw NCSE sample; `release.py` (package) and `fetch.py` handle the corpus release; `runlog.py` writes run logs with counts to `logs/`.
 
 **NCSE facts the code relies on**

@@ -118,7 +118,30 @@ Each command writes a log to `logs/`. Running `acquire` again skips files that a
 
 **Packaging the corpus for publication:** `uv run ncse package` writes `dist/ncse-arts-corpus-v<version>.zip`, its checksum file and `dist/CORPUS_README.md`. See "Publishing the corpus" below.
 
-Later stages (annotation, review, assembly, statistics) will be added here as they are built.
+**Annotation (stages 4–7):**
+
+Before the first run, set the address and your key for the university's LiteLLM service as environment variables (they are never written into files), and fill in the model names in `config.yaml` (`annotation.analyst.model`, `annotation.reviewer.model`):
+
+```
+export LITELLM_BASE_URL=https://<address of the service>/v1
+export LITELLM_API_KEY=<your key>
+```
+
+| Stage | Command | What it does and writes |
+|---|---|---|
+| Estimate | `uv run ncse estimate` | prints the expected number of requests and tokens; no requests |
+| 4. Analyst | `uv run ncse analyse` | sends each article to the analyst; every answer is checked at once and retried if rejected; `data/annotation/full/analyst/<article>.json` |
+| 5. Check | `uv run ncse check analyst` | checks all stored analyst answers again, no requests; `reports/03-analyst-checks.md` |
+| 6. Reviewer | `uv run ncse review` | sends each analysed article to the reviewer, checked the same way; `data/annotation/full/reviewer/<article>.json` |
+| 7. Check again | `uv run ncse check reviewer` | checks all reviewer answers again, no requests; `reports/04-review-checks.md` |
+
+- **Sample mode:** add `--sample` to any of these commands to work on the 24 articles of `corpus_sample/` instead; results go to `data/annotation/sample/` and the reports get `-sample` in their names.
+- **Smaller runs:** `--limit 5` processes at most 5 articles; `--articles LDR-1851-05-17-011 MRP-1822-03-02-001` only the named ones.
+- **Interrupted runs:** run the same command again. Finished articles are skipped, and an answer that was received is never requested again.
+- **Failed articles** (still rejected after `annotation.max_retries` retries) are listed in the log and the report. `--retry-failed` gives them a new round of attempts.
+- Each answer, accepted or not, is kept exactly as the model returned it. What the checks do is described in `docs/output-format.md`.
+
+Later stages (assembly, statistics) will be added here as they are built.
 
 ## Building the corpus or fetching the published one
 

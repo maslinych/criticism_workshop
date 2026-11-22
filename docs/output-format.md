@@ -1,6 +1,6 @@
 # Output format of the annotation stages
 
-**Status: draft for approval (✋2), 2026-11-22.** Decisions D-022 to D-024 in `decisions.md`.
+**Status: approved at ✋2, 2026-11-22.** Decisions D-022 to D-025 in `decisions.md`. Implemented in `src/ncse/checks.py`.
 
 This document describes exactly what the two LLM steps return, what the checking code does with it, and what the final table will look like. The *content* of the annotation is defined in `annotation-guidelines.md` and `evidence-and-review.md`; this file defines its *form*. The prompts themselves are in `prompts/` (see `prompts/README.md`).
 
@@ -74,18 +74,22 @@ A check either **rejects** the answer (it is retried, section 6) or **flags** a 
 
 **Rejected:**
 
-1. The answer is not valid JSON, or does not match the schema: missing or extra fields, values outside the allowed lists, wrong types.
-2. A `quote` is not a passage of the article's text file. The comparison ignores only differences in **whitespace**: runs of spaces, tabs and line breaks count as one space, and spaces at the start and end are ignored (D-022). Every other difference, including curly versus straight quotation marks, is a mismatch (open question Q-5).
-3. An `evaluative_expression` does not occur inside its `quote`, with the same tolerance.
-4. An `inferred` or `suggested` claim has no assumption, or an `observed` claim has one.
-5. A statement has none of `creator`, `work_title`, `work_genre` (no target).
-6. `art` is `other` and `note` is empty.
+1. **Instruction adherence** (D-025): the answer is empty; is not a bare JSON object (text before or after it, or Markdown code fences); gives a key twice in one object; or was cut off because it reached the length limit.
+2. The answer is not valid JSON, or does not match the schema: missing or extra fields, values outside the allowed lists, wrong types.
+3. A `quote` is not a passage of the article's text file. The comparison ignores only differences in **whitespace**: runs of spaces, tabs and line breaks count as one space, and spaces at the start and end are ignored (D-022). Every other difference, including curly versus straight quotation marks, is a mismatch (open question Q-5).
+4. An `evaluative_expression` does not occur inside its `quote`, with the same tolerance.
+5. An `inferred` or `suggested` claim has no assumption, or an `observed` claim has one.
+6. A statement has none of `creator`, `work_title`, `work_genre` (no target).
+7. `art` is `other` and `note` is empty, or `note` is an empty text (it must be `null` or say something).
+8. A name, title, genre or quoted source has spaces at its start or end, or is wrapped as a whole in quotation marks or underscores (the prompt asks to leave them out; a closing mark that is part of the name, as in `the Author of “Waverley.”`, is fine).
 
 **Flagged:**
 
-7. **Observed but not found.** A free-text claim (`creator`, `work_title`, `work_genre`, `quoted_source`) marked `observed` whose value does not occur anywhere in the article text, ignoring whitespace and capital letters. This catches, for example, a name the model has silently corrected or completed. (It cannot be checked for `art`, `polarity`, `sarcastic` and `criterion`, whose values are categories, not words of the text.)
-8. **Repeated quote.** Two passages with the same quotation.
-9. **Ambiguous quote.** A quotation that occurs more than once in the article. The first occurrence is recorded.
+9. **Observed but not found.** A free-text claim (`creator`, `work_title`, `work_genre`, `quoted_source`) marked `observed` whose value does not occur anywhere in the article text, ignoring whitespace and capital letters. This catches, for example, a name the model has silently corrected or completed. (It cannot be checked for `art`, `polarity`, `sarcastic` and `criterion`, whose values are categories, not words of the text.)
+10. **Repeated quote.** Two passages with the same quotation.
+11. **Repeated statement.** Two statements identical in every field.
+12. **Passage order.** A passage that lies earlier in the article than the one before it (the prompt asks for article order).
+13. **Ambiguous quote.** A quotation that occurs more than once in the article. The first occurrence is recorded.
 
 ## 4. What the code adds
 
@@ -142,12 +146,12 @@ Why can `polarity` and the other four not be deleted on their own? A statement w
 
 The answer is **rejected** (and retried) if:
 
-1. it is not valid JSON or does not match the schema;
+1. it is empty, not a bare JSON object, gives a key twice, was cut off, is not valid JSON, or does not match the schema (the same adherence checks as for the analyst);
 2. an action names a statement that does not exist, or a field that is empty (`null`);
 3. an action is not allowed on its field (table above);
 4. a downgrade does not lower the level: the new level must be below the current one (`observed` > `inferred` > `suggested`);
 5. `delete` comes with a level, or `downgrade` without one;
-6. the reason is empty;
+6. the reason is empty or only spaces;
 7. two actions concern the same field of the same statement, or a deleted statement has further actions.
 
 Then the code applies the actions. Deleted statements and fields **stay in the data**, marked as deleted with the reason. The statement's level is recomputed from the claims that remain.

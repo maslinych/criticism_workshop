@@ -139,7 +139,7 @@ Reason: D-008 asks for a raw sample that lets stages 2–3 be tested and underst
 Consequences: 172 boxes on 18 pages, about 320 KB. Articles other than the chosen 12 that appear on the same pages may be cut off at the edge of the copied pages.
 
 **D-022 — Format of the LLM answers, and prompt files**
-Date: 2026-11-22. Status: provisional (draft for approval at ✋2).
+Date: 2026-11-22. Status: adopted (approved at ✋2, 2026-11-22).
 Decision:
 - Both LLM steps answer in JSON. Each prompt version is a folder `prompts/<step>/v<N>/` with the instructions (`system.md`), the per-article message (`user.md`) and a JSON schema of the answer (`output.schema.json`). A version is frozen once used in a paid run; changes become a new version. The versions in use are set in `config.yaml` (`annotation`).
 - One request per article; articles are not split. The longest article has about 6,100 words.
@@ -152,7 +152,7 @@ Reason: JSON can be checked by a schema and by code. Grouping statements by pass
 Consequences: full specification in `docs/output-format.md`. Checking code and tests are written in the next stage.
 
 **D-023 — Provisional scope rulings for the pilot (answers Q-1 to Q-3 provisionally; adds Q-7)**
-Date: 2026-11-22. Status: provisional, to be confirmed or changed by the project owner at ✋2 or after the pilot.
+Date: 2026-11-22. Status: approved for the pilot at ✋2 (2026-11-22); to be reviewed after the pilot.
 Decision: the prompts apply these rules:
 1. **Performers (Q-1)** are not creators. Judgements of actors, singers, dancers, instrumentalists, conductors and of particular performances are not annotated. A theatre or concert notice that judges the play, the opera or the music itself, or its author or composer, is annotated.
 2. **Other targets (Q-2).** Translations are works, and the translator is their creator. Exhibitions, concerts and theatres as events or institutions are not annotated, nor is the physical book (price, paper, printing). A judgement of a particular work shown at an exhibition is annotated.
@@ -162,7 +162,7 @@ Reason: the corpus sample shows all these cases often. The Leader's literature s
 Consequences: Q-1 to Q-3 remain listed as open until confirmed. Statement counts for music and theatre will be low where notices are mostly about performers. The pilot report will say how often each rule applied, where this can be seen from the data.
 
 **D-024 — Evidence for verbatim fields; what the reviewer may delete**
-Date: 2026-11-22. Status: provisional (draft for approval at ✋2).
+Date: 2026-11-22. Status: adopted (approved at ✋2, 2026-11-22).
 Decision:
 - `quote` and `evaluative_expression` carry no evidence level in the LLM answer: they are verbatim text checked by code, and the code records them as `observed`. `note` is a remark, not a claim. An empty field is not a claim and has no level; an empty `quoted_source` means the critic's own voice.
 - The reviewer may delete a whole statement, or the fields `creator`, `work_title` or `work_genre` on their own. `art`, `polarity`, `sarcastic`, `criterion` and `quoted_source` may be downgraded but not deleted on their own; if one of them is wrong, the reviewer deletes the statement. `quote` and `evaluative_expression` can be neither deleted nor downgraded.
@@ -170,11 +170,25 @@ Decision:
 Reason: `evidence-and-review.md` says that the quotation is observed by definition; the evaluative expression is also verbatim and checked against the quotation. A statement without polarity, criterion or art is not a complete evaluation, and deleting `quoted_source` would turn someone else's judgement into the critic's own, which is a change of value that D-005 forbids. This narrows the reviewer's right to "delete a claim" for these five fields.
 Consequences: enforced by the reviewer checks (`docs/output-format.md`, section 5.2).
 
+**D-025 — Running the LLM steps and checking their answers (stage 6)**
+Date: 2026-11-22. Status: adopted.
+Decision:
+- **Commands.** `uv run ncse analyse` and `uv run ncse review` send the requests (stages 4 and 6); each answer is checked at once, because a rejected answer must be retried. `uv run ncse check analyst` and `uv run ncse check reviewer` (stages 5 and 7) check every stored answer again without any request, confirm that each stored result is exactly what the checks produce from the raw answer, and write a report with statistics to `reports/`. `uv run ncse estimate` estimates requests and tokens. `--sample` runs any of them on `corpus_sample/`.
+- **Instruction adherence is checked for both steps** (project owner, ✋2). Besides the schema and the content rules of `docs/output-format.md`, an answer is rejected when it is not a bare JSON object (text around it, Markdown code fences), repeats a key, was cut off at the length limit, has a name or title wrapped in quotation marks or underscores or with spaces around it, or has an empty note, assumption or reason. These follow explicit instructions in the prompts. Instructions that concern interpretation (passage order, repeated quotes or statements, observed values not found in the text) are flagged, not rejected.
+- **Storage.** One JSON record per article and step in `data/annotation/<full|sample>/<step>/`. It holds every attempt: the messages sent (the instructions are identified by prompt version and SHA-256 checksum rather than copied), the raw answer, token counts, the model named by the service, check errors and flags, and the accepted result. The record is saved right after each answer and before it is checked. A run summary with the settings is written to `data/annotation/<mode>/runs/`.
+- **Resuming.** Accepted and failed articles are skipped. An answer saved but not yet checked is checked on resume, not requested again. An interrupted round of attempts continues where it stopped. `--retry-failed` gives failed articles one new round; old attempts are kept.
+- **Errors of the service.** Network errors and "busy" answers (HTTP 408, 409, 429, 5xx) are retried after a pause that doubles each time; they do not count as attempts. Any other refusal (wrong key, unknown model) stops the run; finished work is kept.
+- **Reviewer.** Articles whose accepted analyst answer has no statements are not sent; they are recorded as reviewed with no actions. A review remembers the checksum of the analyst result it reviewed; if the analyst result changes, the old review is reported, not reused.
+- **Corpus version.** A fetched corpus is identified by its release tag, a locally built one by its build commit. `corpus_sample/` is recorded as `corpus-v1.0 sample`: its 24 texts were compared with corpus-v1.0 (built at commit 4e2af63) and are identical.
+- **Client.** The LiteLLM service is called through its OpenAI-compatible HTTP interface with Python's standard library, so no extra package is needed. `jsonschema` was added to check the schemas. The service address and key are read from the environment variables named in `config.yaml` (`llm`).
+Reason: the owner asked that both steps be checked algorithmically for format and instruction adherence. Saving before checking, and checking saved answers on resume, means a paid answer is never lost or bought twice. Re-checking in a separate command makes stages 5 and 7 runnable on their own and catches any change to the stored data.
+Consequences: code in `src/ncse/checks.py`, `quotes.py`, `prompts.py`, `llm.py`, `annotate.py`, `checkreport.py`, `estimate.py`; tests in `tests/test_checks.py`, `test_prompts.py`, `test_annotate.py`, `test_llm.py` (fake LLM, no network). Not yet run against the real service: the models are not chosen yet.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.
 
-Q-1 to Q-3 have provisional answers for the pilot in D-023.
+Q-1 to Q-3 and Q-7 have provisional answers for the pilot in D-023.
 
 - **Q-1. Performers.** Do evaluations of actors, singers and musicians count as evaluations of "creators"?
 - **Q-2. Other targets.** How are evaluations of exhibitions, theatres, concerts as events, editions and translations treated?

@@ -15,6 +15,19 @@ def main() -> None:
     sub.add_parser("package", help="package the prepared corpus for publication as a GitHub release")
     fetch = sub.add_parser("fetch", help="download the published corpus instead of building it")
     fetch.add_argument("--force", action="store_true", help="replace a corpus already in place")
+    for name, help_text in [("analyse", "stage 4: send articles to the analyst LLM (answers checked at once)"),
+                            ("review", "stage 6: send analysed articles to the reviewer LLM (answers checked at once)")]:
+        p = sub.add_parser(name, help=help_text)
+        p.add_argument("--sample", action="store_true", help="sample mode: use corpus_sample/")
+        p.add_argument("--limit", type=int, help="process at most this many articles in this run")
+        p.add_argument("--articles", nargs="+", metavar="ID", help="process only these articles")
+        p.add_argument("--retry-failed", action="store_true",
+                       help="give articles that failed earlier a new round of attempts")
+    check = sub.add_parser("check", help="stages 5 and 7: re-check stored answers and write a report (no LLM requests)")
+    check.add_argument("step", choices=["analyst", "reviewer"])
+    check.add_argument("--sample", action="store_true", help="sample mode: use corpus_sample/")
+    est = sub.add_parser("estimate", help="estimate requests and tokens before a run")
+    est.add_argument("--sample", action="store_true", help="sample mode: use corpus_sample/")
     args = parser.parse_args()
 
     cfg = load_config()
@@ -32,4 +45,17 @@ def main() -> None:
         from . import fetch
 
         return fetch.run(cfg, force=args.force)
+    elif args.stage in ("analyse", "review"):
+        from . import annotate
+
+        return annotate.run(cfg, "analyst" if args.stage == "analyse" else "reviewer", sample=args.sample,
+                            limit=args.limit, articles=args.articles, retry_failed=args.retry_failed)
+    elif args.stage == "check":
+        from . import checkreport
+
+        return checkreport.run(cfg, args.step, sample=args.sample)
+    elif args.stage == "estimate":
+        from . import estimate
+
+        return estimate.run(cfg, sample=args.sample)
     stage.run(cfg)
