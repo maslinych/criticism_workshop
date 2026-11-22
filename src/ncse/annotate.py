@@ -26,6 +26,7 @@ import csv
 import datetime as dt
 import hashlib
 import json
+import os
 import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -134,6 +135,7 @@ class StepRunner:
         self.run_id = f"{step}-{dt.datetime.now():%Y%m%d-%H%M%S}"
         self.lock = threading.Lock()
         self.stop = threading.Event()
+        self.client.stop = self.stop  # the client's pauses before a retry end when the run stops
         self.fatal: str | None = None
 
     def count(self, what: str, n: int = 1) -> None:
@@ -258,7 +260,7 @@ class StepRunner:
             try:
                 reply = self.client.chat(self.model, messages, self.settings)
             except LLMError as e:
-                self.fatal = str(e)
+                self.fatal = self.fatal or str(e)  # keep the first reason (e.g. Ctrl-C)
                 self.stop.set()
                 save_record(self.out, record)
                 self.info(f"{aid}: stopping the run: {e}")
@@ -281,6 +283,21 @@ class StepRunner:
         save_record(self.out, record)
         self.count("failed")
         self.info(f"{aid}: FAILED after {self.max_attempts} attempts")
+
+    def interrupted(self, pool: ThreadPoolExecutor) -> None:
+        """Ctrl-C: send no new request, stop any pause before a retry, and let
+        requests already sent finish, so that answers being paid for are saved.
+        A second Ctrl-C quits at once; answers still on their way are lost."""
+        self.fatal = "interrupted with Ctrl-C"
+        self.stop.set()
+        self.info("Ctrl-C: no new requests will be sent. Waiting for the requests already sent, so that "
+                  "their answers are saved. Press Ctrl-C again to quit at once (their answers would be lost).")
+        try:
+            pool.shutdown(wait=True, cancel_futures=True)
+        except KeyboardInterrupt:
+            self.info("quitting at once. Finished work is saved; run the same command again to continue.")
+            self.log.close()
+            os._exit(130)  # worker threads may still be waiting for the service
 
     @staticmethod
     def repeated(record: dict, round_start: int) -> bool:
@@ -350,9 +367,13 @@ class StepRunner:
             work = work[:limit]
         self.info(f"{len(work)} article(s) to process")
         workers = self.cfg["annotation"].get("concurrency", 1)
-        with ThreadPoolExecutor(max_workers=workers) as pool:
+        pool = ThreadPoolExecutor(max_workers=workers)
+        try:
             for future in [pool.submit(self.process, art, rec) for art, rec in work]:
                 future.result()  # re-raise programming errors
+        except KeyboardInterrupt:
+            self.interrupted(pool)
+        pool.shutdown(wait=True)
         if self.fatal:
             self.info(f"run stopped early: {self.fatal}. Finished work is saved; run the same command again to continue.")
             self.count("stopped early")

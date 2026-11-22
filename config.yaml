@@ -146,3 +146,5 @@ llm:
   timeout: 600           # seconds to wait for one answer
   transport_retries: 5   # tries after network errors or "busy" answers (not counted as attempts)
   pause: 10              # seconds before the first such try; doubles each time
+  slow_failure: 120      # a gateway error (HTTP 502/504) or time-out after this many seconds is
+                         # not retried: the model needs longer than the service allows

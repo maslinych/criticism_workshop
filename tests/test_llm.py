@@ -86,3 +86,51 @@ def test_models_lists_names(monkeypatch):
     monkeypatch.setattr(llm.urllib.request, "urlopen",
                         lambda request, timeout: FakeResponse(json.dumps(scripted_get).encode()))
     assert client().models() == ["a", "b"]
+
+
+class Clock:
+    """A clock that moves forward by `step` seconds each time it is read."""
+
+    def __init__(self, step):
+        self.now, self.step = 0.0, step
+
+    def __call__(self):
+        self.now += self.step
+        return self.now
+
+
+def test_gateway_error_after_a_long_wait_is_not_retried(monkeypatch):
+    sent = scripted(monkeypatch, [http_error(502), OK])
+    c = client(slow_failure=120, clock=Clock(150))  # each request "takes" 150 s
+    with pytest.raises(llm.LLMError, match="gave up after waiting 150 s"):
+        c.chat("m", [], {})
+    assert len(sent) == 1
+
+
+def test_time_out_after_a_long_wait_is_not_retried(monkeypatch):
+    sent = scripted(monkeypatch, [TimeoutError("timed out"), OK])
+    with pytest.raises(llm.LLMError, match="needs longer than the service allows"):
+        client(slow_failure=120, clock=Clock(600)).chat("m", [], {})
+    assert len(sent) == 1
+
+
+def test_quick_gateway_error_is_retried(monkeypatch):
+    sent = scripted(monkeypatch, [http_error(502), OK])
+    assert client(slow_failure=120, clock=Clock(1)).chat("m", [], {}).text == "{}"
+    assert len(sent) == 2
+
+
+def test_stopping_ends_the_pause_before_a_retry(monkeypatch):
+    sent = scripted(monkeypatch, [http_error(503), OK])
+    c = llm.LLMClient("http://example.invalid/v1/", "key", pause=3600, log=lambda m: None)
+    c.stop.set()  # the run was interrupted: no hour-long wait, no second request
+    with pytest.raises(llm.LLMError, match="interrupted"):
+        c.chat("m", [], {})
+    assert len(sent) == 0
+
+
+def test_forbidden_model_gets_a_hint(monkeypatch):
+    err = urllib.error.HTTPError("u", 403, "x", {}, io.BytesIO(b"Not authorized to access this Model"))
+    scripted(monkeypatch, [err])
+    with pytest.raises(llm.LLMError, match="not be allowed to use this model"):
+        client().chat("m", [], {})

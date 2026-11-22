@@ -40,7 +40,7 @@ class FakeClient:
     def chat(self, model, messages, settings):
         self.requests.append(messages)
         item = self.answers.pop(0)
-        if isinstance(item, Exception):
+        if isinstance(item, BaseException):  # includes KeyboardInterrupt (Ctrl-C)
             raise item
         finish = "stop"
         if isinstance(item, tuple):  # (text, finish_reason)
@@ -193,6 +193,15 @@ def test_interrupted_round_continues_where_it_stopped(cfg):
     assert len(client.requests) == 1
     assert client.requests[0][3]["role"] == "user"  # the retry carries the earlier feedback
     assert record(cfg)["accepted_attempt"] == 2
+
+
+def test_ctrl_c_stops_the_run_and_keeps_finished_work(cfg):
+    client = FakeClient([good_answer(), KeyboardInterrupt()])
+    summary = analyse(cfg, client, articles=[ARTICLE, "LDR-1850-11-30-005"])
+    assert summary["counts"]["stopped early"] == 1
+    assert client.stop.is_set()  # the client's pauses end too
+    done = [record(cfg, aid=a) for a in (ARTICLE, "LDR-1850-11-30-005")]
+    assert [r["status"] for r in done if r] == ["accepted"]
 
 
 def test_fatal_error_stops_before_other_articles(cfg):

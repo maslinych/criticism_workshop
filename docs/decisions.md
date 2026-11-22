@@ -213,6 +213,15 @@ A normalised or approximate match must start and end at word boundaries in the t
 Reason: in the smoke test, quotations failed only where the model tidied the text at a break in the corpus: it dropped a stray full stop between two text boxes ("the Minuet.⏎⏎and Saraband"), joined a broken word ("appre-elated"), and left out a semicolon inside quotation marks. None of these changes a word. The word-boundary rule was added after a test showed that "no ground for supposing" would otherwise match "any ground for supposing" with one changed letter, reversing the meaning.
 Consequences: `AGENTS.md` (rule 6 and section 10) updated with the owner's approval. Code in `src/ncse/quotes.py`; settings under `quotes` in `config.yaml`; tests in `tests/test_checks.py`.
 
+**D-029 — Stopping a run: Ctrl-C, and answers that take too long**
+Date: 2026-11-22. Status: adopted.
+Decision:
+- **Ctrl-C.** The first Ctrl-C sends no new request and ends any pause before a retry. Requests already sent may finish, so that answers being paid for are saved. A second Ctrl-C quits at once; answers still on their way are then lost. Either way, the same command continues the run later.
+- **Too slow for the service.** A gateway error (HTTP 502 or 504) or a time-out that comes after at least `llm.slow_failure` seconds (120) is not retried: the run stops with a message saying that the model needs longer than the service allows for one answer. Quick 502 and 504 answers are still retried as "busy".
+- HTTP 401 and 403 errors that mention the model get a hint that the key may not be allowed to use this model, even if `uv run ncse models` lists it.
+Reason: in a smoke test with `jlu/qwen3.8-27b`, a reasoning model, each request ended after about 300 seconds with HTTP 502, apparently the service's time limit for one answer. The code took this for a busy service and retried with growing pauses, so the run would have taken more than half an hour to give up. Ctrl-C did not stop it, because the main program waited for the requests running in the background.
+Consequences: code in `llm.py` and `annotate.py` (`StepRunner.interrupted`); setting `llm.slow_failure` in `config.yaml`; tests in `tests/test_llm.py` and `tests/test_annotate.py`.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.
