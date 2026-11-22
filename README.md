@@ -20,7 +20,7 @@ Two requirements hold throughout the project:
 1. **Traceability.** Every annotation points to an exact, verbatim passage of the source text. Nothing in the dataset is invented, paraphrased or silently corrected.
 2. **Explicit evidence.** Every annotation states how directly the text supports it: whether the text *says* it, the text *implies* it, or the model *suggests* it from its own expectations.
 
-The project also serves as a teaching example for a workshop on agentic workflows for text annotation in the humanities. For that reason, the clarity of the documentation and code matters as much as the dataset itself.
+The documentation and code should be clear enough for humanists without programming experience to follow every step. This matters as much as the dataset itself.
 
 ## Scope
 
@@ -83,6 +83,27 @@ Each stage reads the output of the previous one and writes its own. Every stage 
 8. **Assemble.** Build the final tables and the data dictionary.
 9. **Describe.** Produce summary statistics.
 
+## Building the corpus or fetching the published one
+
+The source data is large: about 900 MB, delivered as a single archive. The prepared corpus built from it is small, a few MB. Once the corpus is approved, it is therefore **frozen and published** as a versioned release (see "Publishing the corpus" below), and later stages work from that published version. There are two ways to obtain the prepared corpus, and both lead to the **same** files:
+
+- **Build from source.** Run stages 1–3 on the complete NCSE data. This code stays in the repository and must always remain runnable, so that anyone can reproduce the published corpus from NCSE.
+- **Fetch the published corpus.** A single fetch stage:
+  1. downloads the corpus release named in the project configuration;
+  2. verifies its checksum;
+  3. unpacks it where stage 4 expects the prepared corpus.
+
+  This is the normal starting point for annotation work once a corpus version exists.
+
+From stage 4 on, nothing depends on which way the corpus was obtained.
+
+**Samples in the repository.** Two small samples are committed as plain files:
+
+- **Raw sample:** a few hundred original NCSE entries (the actual rows of the source data), covering about a dozen complete articles. It serves as test data for the selection and article-rebuilding scripts (stages 2–3), so that they can be tested and understood without the full download.
+- **Corpus sample:** 20–30 prepared articles (text files plus their `metadata.csv` rows) drawn from the published corpus. It is used for quick, cheap test runs of the annotation, check and review stages (see "sample mode" below).
+
+The samples are produced by scripts, not chosen or edited by hand, and the scripts record how they were drawn.
+
 ## The prepared corpus
 
 Data preparation produces a corpus that people can read and check without any special tools. It has two parts:
@@ -105,9 +126,42 @@ Any notes about how an article was rebuilt, such as entries merged across a page
 
 The corpus is a deliverable in its own right. It can be read, sampled and shared (with attribution to NCSE) independently of the annotations. It is also the single, fixed input to all later stages: annotations refer to articles by their identifier and quote the text of these files.
 
+## Publishing the corpus
+
+The full prepared corpus is **not committed to the repository**. It is the output of the pipeline, not part of its source. Committing it would add a full copy to the git history every time it is rebuilt, and it carries its own licence (CC BY 4.0, inherited from NCSE). Instead, it is published as a **release asset** on the project's GitHub repository. The repository must be public so that the corpus can be downloaded without logging in.
+
+**Package.** A zip file named with the corpus version (e.g. `ncse-arts-corpus-v1.0.zip`) containing:
+
+- the folder of article text files;
+- `metadata.csv`;
+- `CORPUS_README.md`, a short description of the corpus:
+  - source and full attribution: the NCSE project, and Bourne's NCSE v2.0 with its DOI;
+  - licence (CC BY 4.0);
+  - periodicals and years covered;
+  - the selection rule and article-rebuilding method, in brief;
+  - number of articles per periodical;
+  - corpus version and date;
+  - the git commit of the code that built it.
+
+Next to the zip, a checksum file (SHA-256) is published, which the fetch stage uses to verify the download.
+
+**Release.**
+
+- Each corpus version is a GitHub release with a tag of the form `corpus-v1.0`. The tag points to the commit of the code that built the corpus.
+- The download address therefore follows a fixed pattern: `https://github.com/<owner>/<repo>/releases/download/corpus-v1.0/ncse-arts-corpus-v1.0.zip`.
+- The address of the release to use is set in the project configuration.
+
+**Versioning.**
+
+- A published release is **never replaced or modified**. Any correction produces a new version (`corpus-v1.1`) with a short note on what changed.
+- Every annotation run records which corpus version it used, so that annotations always point to the exact texts they quote.
+
+A DOI (e.g. by depositing the same zip on Zenodo) is optional.
+
 ## Expected outputs
 
-- **The prepared corpus.** The folder of article text files and `metadata.csv` (see above).
+- **The prepared corpus.** The folder of article text files and `metadata.csv`, published as a versioned release (see above).
+- **Samples.** The raw NCSE sample and the corpus sample, committed to the repository.
 - **Statements table.** One row per evaluative statement. It holds all the fields defined in the annotation guidelines, the evidence levels and assumptions, the reviewer's decision, and a link to its article. Statements deleted by the reviewer stay in the table, marked as deleted with the reason, so that the review step itself can be studied.
 - **Data dictionary.** A plain-language description of every column and its allowed values.
 - **Summary statistics.** For example:
@@ -132,13 +186,14 @@ Annotation runs through the university's **LiteLLM** service, which offers an Op
 Work proceeds in this order. Steps marked ✋ need the project owner's approval before continuing.
 
 1. Analyse the data structure and report findings, including what an entry is and how well the selection rule works. Build the prepared corpus and present a sample of article files with their metadata rows. ✋
-2. Draft the prompts for the analyst and the reviewer, and the exact output format. ✋
-3. Write the scripts that run the LLM steps and check their output, together with automated tests.
-4. Run a pilot on a small sample (e.g. 20–30 articles from both periodicals) and present the results for inspection. ✋
-5. Run the full annotation.
-6. Assemble the dataset, data dictionary and statistics.
+2. Package and publish the approved corpus as release `corpus-v1.0`. Write the fetch stage, and generate and commit the two samples. Check that the fetch stage works from a fresh clone.
+3. Draft the prompts for the analyst and the reviewer, and the exact output format. ✋
+4. Write the scripts that run the LLM steps and check their output, together with automated tests.
+5. Run a pilot on a small sample (e.g. 20–30 articles from both periodicals) and present the results for inspection. ✋
+6. Run the full annotation.
+7. Assemble the dataset, data dictionary and statistics.
 
-The pipeline should also run in a cheap **sample mode** on a handful of articles, so that workshop participants can try every stage themselves.
+The pipeline should also run in a cheap **sample mode** on the corpus sample, so that every stage can be tried and tested quickly, at little cost, and without the full data.
 
 ## Documents in this project
 

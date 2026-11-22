@@ -15,6 +15,9 @@ Technical choices (languages, libraries, file layout, internal formats) are your
 - Keep the project under **git**. Commit in small, meaningful steps with clear messages.
 - Never commit credentials: API keys, passwords, tokens.
 - Do not commit large downloaded source files. The download script and the recorded checksums make them reproducible.
+- Do not commit the full prepared corpus. Publish it as a versioned GitHub release, as described in `README.md` ("Publishing the corpus"). Only the two small samples (raw NCSE sample and corpus sample) are committed, as plain files. Never commit zip archives of data.
+- Never replace or modify a published corpus release. Corrections become a new version.
+- Keep both ways of obtaining the corpus working: building it from NCSE and fetching the published release. A change to stages 1–3 that would change the corpus means a new corpus version.
 - Prompts are part of the code: keep them as separate, versioned files, not hidden inside scripts.
 
 ## 3. Documentation: write everything down
@@ -22,7 +25,7 @@ Technical choices (languages, libraries, file layout, internal formats) are your
 - **`STATUS.md`** lists current tasks, how far along each one is, and anything important learned along the way. Update it at the end of every work session.
 - **`docs/decisions.md`** records decisions with their reasons. This includes small decisions about how a particular kind of annotation case is handled (e.g. "a review of an opera counts as music, not theatre").
 - **`README.md`** must always contain the exact commands for running every stage of the pipeline, from download to statistics.
-- Write for readers who are humanists rather than programmers. Workshop participants will read these files. Explain terms when you first use them, and prefer plain words to jargon.
+- Write for readers who are humanists rather than programmers. Explain terms when you first use them, and prefer plain words to jargon.
 
 ## 4. Reproducibility
 
@@ -33,7 +36,7 @@ Technical choices (languages, libraries, file layout, internal formats) are your
 - **Provenance.** It must always be possible to trace where every piece of data came from:
   - source files: origin, download date and checksum;
   - every article in the prepared corpus: its source file and the identifiers of the NCSE entries it was built from, recorded in `metadata.csv`;
-  - every annotation: the article, the exact passage, the model, the model settings, the prompt version and the date of the run;
+  - every annotation: the corpus version, the article, the exact passage, the model, the model settings, the prompt version and the date of the run;
   - the raw LLM responses: kept, so that any processed result can be checked against what the model actually returned.
 
 ## 5. What the LLM does and what code does

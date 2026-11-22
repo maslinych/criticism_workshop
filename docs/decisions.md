@@ -36,6 +36,14 @@ Status: adopted. Reason: quotations are checked by code against the source text,
 **D-007 — A readable prepared corpus as the fixed input to annotation**
 Status: adopted. Data preparation writes one plain-text file per article, containing text only, plus a `metadata.csv` with one row per article, including the NCSE entry identifiers each article was built from. All later stages read only this corpus. Reason: people can read and check the corpus without special tools, quotations can be verified against simple text files, and the corpus can be shared or reused independently of the annotations.
 
+**D-008 — The approved corpus is frozen and published as a GitHub release; later stages fetch it**
+Status: adopted. The approved corpus is published as a versioned release asset (zip + SHA-256 checksum + `CORPUS_README.md`, tag `corpus-vX.Y`) on the project repository. Annotation work starts from the fetched release; building from NCSE (stages 1–3, about 900 MB of source data) remains possible and reproducible. A raw NCSE sample (test data for stages 2–3) and a 20–30-article corpus sample (for sample mode) are committed as plain files. Reasons:
+- The source data is large, while the corpus is small.
+- A release adds nothing to the git history and has a stable address.
+- The tag ties the corpus to the code that built it.
+- Annotations can always point to an exact, unchanging corpus version.
+- Committing a zip to git would grow the history with every rebuild and bring no saving in space.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.
