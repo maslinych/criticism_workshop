@@ -9,7 +9,7 @@ Update this file at the end of every work session: what was done, what is next, 
 | 1 | Set up repository, environment, configuration | done | Python + uv (D-009); `config.yaml` |
 | 2 | Acquire NCSE v2.0 data | done | 3 files, checksums OK; `reports/acquire-manifest.json` |
 | 3 | Inspect data structure; test selection rule; rebuild articles; write prepared corpus (`.txt` files + `metadata.csv`) | done, approved at ✋1 (2026-11-22) | 5,375 articles (D-016, D-017, D-018); report `reports/01-data-inspection.md` section 8; new 24-article sample in `corpus_sample/` |
-| 4 | Publish corpus release `corpus-v1.0`; fetch stage; commit raw and corpus samples; test fetching from a fresh clone | in progress | `package` and `fetch` stages done and tested (D-019); release packaged in `dist/`, to be published by the project owner; raw NCSE sample not yet made |
+| 4 | Publish corpus release `corpus-v1.0`; fetch stage; commit raw and corpus samples; test fetching from a fresh clone | in progress | `corpus-v1.0` published 2026-11-22 (tag on commit 4e2af63, checksum pinned in `config.yaml`); fetch from a fresh clone tested: 5,375 articles, identical to the built corpus, tests pass; raw NCSE sample not yet made |
 | 5 | Draft analyst and reviewer prompts and output format | not started | ✋ approval needed |
 | 6 | Scripts for LLM calls, output checks, tests | not started | |
 | 7 | Pilot run (20–30 articles) | not started | ✋ results reviewed by project owner |
@@ -19,7 +19,6 @@ Update this file at the end of every work session: what was done, what is next, 
 
 ## Next steps
 
-- Project owner: publish `corpus-v1.0` with the commands in `README.md` ("Publishing the corpus", steps 2–3); then pin the checksum in `config.yaml` (step 4) and test `uv run ncse fetch` from a fresh clone (step 5).
 - Raw NCSE sample (a few hundred boxes, about a dozen complete articles) as test data for stages 2–3.
 - Then stage 5: draft analyst and reviewer prompts and the output format (✋2).
 

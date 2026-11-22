@@ -57,7 +57,7 @@ release:
   version: "1.0"
   # SHA-256 checksum of the published zip. Filled in after publishing, so that `ncse fetch`
   # checks the download against this value; until then it uses the published .sha256 file.
-  sha256: null
+  sha256: 385ea919c2a0ee55317f73d87ba83817bc219ae982901104aded284ade596dec  # corpus-v1.0, published 2026-11-22
 
 # Selection rule D-002 (provisional): NCSE text type and topic labels, as named in
 # the NCSE class mapping files.
