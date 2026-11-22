@@ -26,6 +26,7 @@ def main() -> None:
     check = sub.add_parser("check", help="stages 5 and 7: re-check stored answers and write a report (no LLM requests)")
     check.add_argument("step", choices=["analyst", "reviewer"])
     check.add_argument("--sample", action="store_true", help="sample mode: use corpus_sample/")
+    sub.add_parser("models", help="list the model names the LiteLLM service offers")
     est = sub.add_parser("estimate", help="estimate requests and tokens before a run")
     est.add_argument("--sample", action="store_true", help="sample mode: use corpus_sample/")
     args = parser.parse_args()
@@ -48,8 +49,17 @@ def main() -> None:
     elif args.stage in ("analyse", "review"):
         from . import annotate
 
-        return annotate.run(cfg, "analyst" if args.stage == "analyse" else "reviewer", sample=args.sample,
-                            limit=args.limit, articles=args.articles, retry_failed=args.retry_failed)
+        summary = annotate.run(cfg, "analyst" if args.stage == "analyse" else "reviewer", sample=args.sample,
+                               limit=args.limit, articles=args.articles, retry_failed=args.retry_failed)
+        if summary["counts"].get("stopped early"):
+            raise SystemExit(1)
+        return None
+    elif args.stage == "models":
+        from .llm import LLMClient
+
+        for name in LLMClient.from_config(cfg).models():
+            print(name)
+        return None
     elif args.stage == "check":
         from . import checkreport
 

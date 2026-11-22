@@ -72,3 +72,17 @@ def test_credentials_come_from_the_environment(monkeypatch):
     monkeypatch.setenv("T_URL", "http://x/v1")
     monkeypatch.setenv("T_KEY", "k")
     assert llm.LLMClient.from_config(cfg).url == "http://x/v1/chat/completions"
+
+
+def test_unknown_model_gets_a_hint(monkeypatch):
+    err = urllib.error.HTTPError("u", 404, "x", {}, io.BytesIO(b"Unknown model/service"))
+    scripted(monkeypatch, [err])
+    with pytest.raises(llm.LLMError, match="ncse models"):
+        client().chat("m", [], {})
+
+
+def test_models_lists_names(monkeypatch):
+    scripted_get = {"data": [{"id": "b"}, {"id": "a"}]}
+    monkeypatch.setattr(llm.urllib.request, "urlopen",
+                        lambda request, timeout: FakeResponse(json.dumps(scripted_get).encode()))
+    assert client().models() == ["a", "b"]

@@ -36,7 +36,8 @@ class Reply:
 class LLMClient:
     def __init__(self, base_url: str, api_key: str, timeout: int = 600,
                  transport_retries: int = 5, pause: float = 10.0, log=print):
-        self.url = base_url.rstrip("/") + "/chat/completions"
+        self.base_url = base_url.rstrip("/")
+        self.url = self.base_url + "/chat/completions"
         self.api_key = api_key
         self.timeout = timeout
         self.transport_retries = transport_retries
@@ -67,7 +68,9 @@ class LLMClient:
             except urllib.error.HTTPError as e:
                 detail = e.read().decode("utf-8", "replace")[:500]
                 if e.code not in TRANSIENT_HTTP:
-                    raise LLMError(f"the service refused the request (HTTP {e.code}): {detail}") from e
+                    hint = (" — check the model name in config.yaml; `uv run ncse models` lists the "
+                            "names the service knows") if e.code in (400, 404) and "model" in detail.lower() else ""
+                    raise LLMError(f"the service refused the request (HTTP {e.code}): {detail}{hint}") from e
                 problem = f"HTTP {e.code}"
             except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
                 problem = f"network problem: {e}"
@@ -80,3 +83,15 @@ class LLMClient:
         return Reply(text=choice["message"].get("content"), finish_reason=choice.get("finish_reason"),
                      usage=payload.get("usage") or {}, response_id=payload.get("id"),
                      model=payload.get("model"))
+
+    def models(self) -> list[str]:
+        """The model names the service offers (GET /models)."""
+        request = urllib.request.Request(self.base_url + "/models",
+                                         headers={"Authorization": f"Bearer {self.api_key}"})
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            raise LLMError(f"the service refused the request (HTTP {e.code}): "
+                           f"{e.read().decode('utf-8', 'replace')[:500]}") from e
+        return sorted(m["id"] for m in payload.get("data", []))
