@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reviewer-output-v1",
+  "title": "Reviewer response, prompt version v1",
+  "description": "What the reviewer LLM must return for one article: a list of delete and downgrade actions. The schema checks the structure and the allowed values. Whether each action is allowed for the statement it names (the statement exists, the field is filled and deletable, the new level is lower) is checked by code; see docs/output-format.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["actions"],
+  "properties": {
+    "actions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/action"}
+    }
+  },
+  "$defs": {
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement_id", "field", "action", "new_evidence", "reason"],
+      "properties": {
+        "statement_id": {"type": "string", "pattern": "^p[0-9]{2,}-s[0-9]{2,}$"},
+        "field": {
+          "type": "string",
+          "enum": ["statement", "creator", "work_title", "work_genre", "art", "polarity", "sarcastic", "criterion", "quoted_source"]
+        },
+        "action": {"type": "string", "enum": ["delete", "downgrade"]},
+        "new_evidence": {"enum": ["inferred", "suggested", null]},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

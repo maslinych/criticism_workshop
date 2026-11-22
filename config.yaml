@@ -101,3 +101,17 @@ raw_sample:
   invented: 1     # with a box of invented text left out
   max_pages: 2    # only articles whose unit spans at most this many pages
   seed: 1850
+
+# Annotation stages (D-022). Prompts are in prompts/<step>/<version>/.
+# Model names refer to the LiteLLM service; the address and key come from environment
+# variables, never from this file. Models are chosen before the pilot.
+annotation:
+  analyst:
+    prompt_version: v1
+    model: null          # to be chosen with the project owner
+    temperature: 0
+  reviewer:
+    prompt_version: v1
+    model: null          # may differ from the analyst's model (evidence-and-review.md, section 5)
+    temperature: 0
+  max_retries: 2         # extra attempts after an answer fails the checks

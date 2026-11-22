@@ -278,6 +278,8 @@ The pipeline should also run in a cheap **sample mode** on the corpus sample, so
 | `AGENTS.md` | Working rules for whoever builds the project, human or AI coding agent |
 | `docs/annotation-guidelines.md` | **What** to annotate: the evaluative statement and its fields |
 | `docs/evidence-and-review.md` | **How sure** we are: evidence levels and the analyst/reviewer protocol |
+| `docs/output-format.md` | **In what form**: the exact format of the LLM answers, the checks and the final table |
+| `prompts/` | The analyst and reviewer prompts, by version, with the schema of their answers |
 | `docs/decisions.md` | Log of decisions, including how particular annotation cases are handled |
 | `STATUS.md` | Current progress, next steps and open problems |
 

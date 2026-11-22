@@ -138,9 +138,43 @@ Decision: `uv run ncse sample-raw` writes `raw_sample/`, committed to git. It ho
 Reason: D-008 asks for a raw sample that lets stages 2–3 be tested and understood without the 1 GB download. CSV can be read without special tools and keeps the OCR text exactly (tested on line breaks, quotation marks and empty texts). Copying whole pages, not just the article's boxes, keeps the context the rebuild rule depends on: headings, neighbouring boxes and unit length.
 Consequences: 172 boxes on 18 pages, about 320 KB. Articles other than the chosen 12 that appear on the same pages may be cut off at the edge of the copied pages.
 
+**D-022 — Format of the LLM answers, and prompt files**
+Date: 2026-11-22. Status: provisional (draft for approval at ✋2).
+Decision:
+- Both LLM steps answer in JSON. Each prompt version is a folder `prompts/<step>/v<N>/` with the instructions (`system.md`), the per-article message (`user.md`) and a JSON schema of the answer (`output.schema.json`). A version is frozen once used in a paid run; changes become a new version. The versions in use are set in `config.yaml` (`annotation`).
+- One request per article; articles are not split. The longest article has about 6,100 words.
+- The analyst returns a list of passages, each with a verbatim quote and the statements resting on it. Each claim field is `{value, evidence, assumption}`; an empty field is `null`.
+- The reviewer returns only a list of actions (statement, field, delete or downgrade, new level, reason). It never repeats the statements, so it cannot rewrite or add anything.
+- Identifiers, quotation positions and statement levels are computed by code (`p01-s02` in LLM messages; `<article ID>-p01-s02` in the data).
+- Quotation matching tolerance: runs of whitespace (spaces, tabs, line breaks) count as one space, and leading and trailing whitespace is ignored. Nothing else is tolerated for now (Q-5 stays open).
+- A rejected answer is retried with a list of the failed checks; after `annotation.max_retries` the article is marked failed for that step. An answer is accepted or rejected as a whole.
+Reason: JSON can be checked by a schema and by code. Grouping statements by passage gives the shared passage identifier of D-003 directly. An action list is the narrowest possible form for the reviewer and makes its limits easy to enforce. Retrying with the reasons lets the model correct a copying error instead of repeating it.
+Consequences: full specification in `docs/output-format.md`. Checking code and tests are written in the next stage.
+
+**D-023 — Provisional scope rulings for the pilot (answers Q-1 to Q-3 provisionally; adds Q-7)**
+Date: 2026-11-22. Status: provisional, to be confirmed or changed by the project owner at ✋2 or after the pilot.
+Decision: the prompts apply these rules:
+1. **Performers (Q-1)** are not creators. Judgements of actors, singers, dancers, instrumentalists, conductors and of particular performances are not annotated. A theatre or concert notice that judges the play, the opera or the music itself, or its author or composer, is annotated.
+2. **Other targets (Q-2).** Translations are works, and the translator is their creator. Exhibitions, concerts and theatres as events or institutions are not annotated, nor is the physical book (price, paper, printing). A judgement of a particular work shown at an exhibition is annotated.
+3. **Boundary cases of art (Q-3).** Opera, oratorio and songs are `music` (the example given in `AGENTS.md`, section 3). Plays are `theatre`. Book illustrations are `visual art`. `other` stays, with a required note.
+4. **Books of every kind (new Q-7)** count as works: histories, biographies, travels, sermons, essays, scholarship, as well as fiction and poetry. Their `art` is `literature`, and `work_genre` records the kind of book ("history", "sermon"), so that non-fiction can be filtered out later. A judgement of a person's arguments as expressed in a work is a judgement of the work.
+Reason: the corpus sample shows all these cases often. The Leader's literature section and the Monthly Repository review every kind of book, and its theatre and music notices are largely about singers and actors. Without a rule the analyst would decide case by case. Excluding performers keeps the `creator` field to creators in the sense of the guidelines; the alternative, annotating performers, would need a way to tell them apart, which the guidelines do not have, and adding a field would be a new category (AGENTS.md, section 9). For books, recording the kind of book in `work_genre` keeps all information without inventing a category.
+Consequences: Q-1 to Q-3 remain listed as open until confirmed. Statement counts for music and theatre will be low where notices are mostly about performers. The pilot report will say how often each rule applied, where this can be seen from the data.
+
+**D-024 — Evidence for verbatim fields; what the reviewer may delete**
+Date: 2026-11-22. Status: provisional (draft for approval at ✋2).
+Decision:
+- `quote` and `evaluative_expression` carry no evidence level in the LLM answer: they are verbatim text checked by code, and the code records them as `observed`. `note` is a remark, not a claim. An empty field is not a claim and has no level; an empty `quoted_source` means the critic's own voice.
+- The reviewer may delete a whole statement, or the fields `creator`, `work_title` or `work_genre` on their own. `art`, `polarity`, `sarcastic`, `criterion` and `quoted_source` may be downgraded but not deleted on their own; if one of them is wrong, the reviewer deletes the statement. `quote` and `evaluative_expression` can be neither deleted nor downgraded.
+- When an evaluation belongs to a quoted source but `quoted_source` is empty, the reviewer deletes the statement.
+Reason: `evidence-and-review.md` says that the quotation is observed by definition; the evaluative expression is also verbatim and checked against the quotation. A statement without polarity, criterion or art is not a complete evaluation, and deleting `quoted_source` would turn someone else's judgement into the critic's own, which is a change of value that D-005 forbids. This narrows the reviewer's right to "delete a claim" for these five fields.
+Consequences: enforced by the reviewer checks (`docs/output-format.md`, section 5.2).
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.
+
+Q-1 to Q-3 have provisional answers for the pilot in D-023.
 
 - **Q-1. Performers.** Do evaluations of actors, singers and musicians count as evaluations of "creators"?
 - **Q-2. Other targets.** How are evaluations of exhibitions, theatres, concerts as events, editions and translations treated?
@@ -148,5 +182,6 @@ These should be settled during or after the pilot, then recorded as decisions.
 - **Q-4. Selection beyond the topic label.** *(Answered: D-018.)* Should texts labelled with other topics (e.g. *Religion*, *Education*) that contain reviews be added? If so, how are they identified?
 - **Q-5. Quotation matching tolerances.** Which trivial differences may the quotation check ignore, beyond whitespace and line breaks?
 - **Q-6. Text the OCR model invented.** *(Answered: D-017.)* NCSE v2.0 was read by an image-to-text model, which sometimes adds text that is not on the page: invented newspaper headers (for example "TUESDAY, AUGUST 20, 1861" on an 1851 page), sentences repeated in a loop, and remarks addressed to the user ("Certainly! Below is the extracted table…"). Should such passages be detected and excluded, flagged in the metadata, or left alone? For now they are left in the text unchanged (D-006).
+- **Q-7. Non-fiction books.** Do evaluations of histories, sermons, travels, scientific and scholarly books count, with `art` = `literature`? Provisionally yes (D-023); `work_genre` records the kind of book.
 
 **Notes on Q-4 from the data inspection (2026-11-22).** The Leader opens its literature section with the motto "Critics are not the legislators, but the judges and police of literature". Boxes with this motto are sometimes labelled *education* or *religion* rather than arts. *Monthly Repository* reviews of theological books ("Art. III.—Religious Liberty Stated and Enforced… By Thomas Williams") are labelled *religion*. Section headings and review formulas ("Art. N.—", "By … pp.") could find such reviews. See `reports/01-data-inspection.md`.
