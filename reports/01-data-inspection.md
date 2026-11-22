@@ -1,5 +1,7 @@
 # Data inspection and prepared corpus: report for approval point ✋1
 
+> **Revised after the project owner's answers (2026-11-22).** Sections 1–7 describe the first version of the corpus (rebuild rule D-012) and the questions asked about it. **Section 8 describes the current corpus**: articles rebuilt as whole units between headings (D-016), invented OCR text left out (D-017), selection not widened (D-018). The sample in section 6 has been replaced by the one in section 8.
+
 Date: 2026-11-22. All numbers come from `reports/01-data-inspection-tables.md` (made by `uv run ncse inspect`) and `reports/02-corpus-summary.md` (made by `uv run ncse prepare`). Decisions referred to as D-xxx are in `docs/decisions.md`.
 
 ## 1. What was downloaded
@@ -88,7 +90,7 @@ For comparison, keeping only whole title segments where at least half the text i
 
 The corpus is written to `data/corpus/full/`: 5,127 text files plus `metadata.csv`, 34 MB. It is not in git; `uv run ncse prepare` rebuilds it. The text files hold only the box texts, joined by a blank line, with the OCR unchanged. A test (`tests/test_corpus_integrity.py::test_sample_texts_match_source`) checks the sample articles letter for letter against the NCSE files.
 
-**Sample** (`corpus_sample/`, committed; 12 articles per periodical, chosen at random by code among articles of at least 1,500 characters). The comments are my reading of each text:
+**Sample of the first version** (replaced; see section 8 for the current sample) (`corpus_sample/`, committed; 12 articles per periodical, chosen at random by code among articles of at least 1,500 characters). The comments are my reading of each text:
 
 | Article | Pages | Words | Boxes | Selected share | Heading | Comment |
 |---|---|---:|---:|---:|---|---|
@@ -146,3 +148,96 @@ rebuild_notes:   bridged 1 unselected box(es): LDR-1852-12-11_page_19_B0C2R5
 3. **Q-6:** should invented OCR text be flagged or excluded? Two of the 24 sample articles contain passages that cannot be from their issue's date.
 4. The *Monthly Repository* is under-represented (0.5 against 3 million words). Should the pilot and the statistics balance the two periodicals?
 5. **Cost:** the full corpus is about 3.5 million words, roughly 5 million tokens of input before prompts. The cost estimate before the full run will start from this figure.
+
+## 8. Revised corpus after the project owner's answers
+
+The answers given, and what was done:
+
+| Question | Answer | What changed |
+|---|---|---|
+| 1. Rebuild, fragments, false positives | False positives are acceptable but must not dominate the corpus. Fragments are worse, because they distort the context. Complete them into whole articles if possible. | New rebuild rule D-016 (below) |
+| 2. Q-4, widening the selection | Fiction matters more than political or religious writing. Do not inflate the corpus; widening is fine only if it can be done cleanly. | Tested, not adopted (D-018) |
+| 3. Q-6, invented text | Exclude it, and record what was excluded and why. | Detection and exclusion list (D-017) |
+| 4. Balance between periodicals | No balancing. | Nothing |
+
+### 8.1 Invented text (D-017)
+
+A box is left out as invented text when the OCR model reached its output limit of 2,000 tokens for every part of the box, or when at least 30% of its 8-word sequences repeat. In the issues used this applies to 1,152 boxes of the *Monthly Repository* (8% of its characters) and 4,810 boxes of *The Leader* (15%). The 527 of them that lie inside an article, or would have formed one, are listed in `excluded_boxes.csv` with the reason (3.3 million characters, about 0.55 million words, no longer sent to the LLM). An example row:
+
+```
+ncse_entry_id: MRP-1832-03-02_page_45_B0C1R2
+reason:        output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part
+n_chars:       8424
+selected:      yes
+article_id:    MRP-1832-03-02-001
+text_start:    THE POOR AND THEIR POETRY*. *This is a subject …
+```
+
+**Not caught:** short invented passages that do not loop. In the new sample, two such passages remain: a note on Trelawny's life of Byron (published 1858) in an 1851 issue, and news of the death of King Theodore of Abyssinia (died 1868) in an 1857 issue. As an extra signal, `rebuild_notes` now flags any box that mentions a year more than one year after the issue date (219 articles). These boxes are flagged, not excluded, because most such years are OCR misreadings (1881 for 1851). Neither of the two examples mentions a year.
+
+### 8.2 Whole articles (D-016)
+
+Headings are now also found **inside** text boxes. In *The Leader* most review titles are the first words of an ordinary text box ("REED ON ENGLISH LITERATURE. English Literature from Chaucer to Tennyson. By Henry Reed."), not separate title boxes. Three kinds are recognised: a phrase in capitals ending in a full stop, a numbered review ("Art. VI.—"), and a book heading (title, "By" and author, place, format or pages). The text from one heading to the next is a *unit*. A unit containing a selected box is taken **whole** if it spans at most 3 pages and either opens with a box carrying the arts topic label (of any text type except advert) or has at least half its text selected. Other units contribute only their selected parts, as before.
+
+| | *Monthly Repository* first version | *Monthly Repository* now | *The Leader* first version | *The Leader* now |
+|---|---:|---:|---:|---:|
+| articles | 1,226 | 1,240 | 3,901 | 4,135 |
+| words | 489,742 | 521,683 | 3,046,132 | 3,373,664 |
+| median words per article | 185 | 218 | 495 | 562 |
+| taken as whole units | — | 397 | — | 3,059 |
+| starting at a title box or a heading in the text | 488 | 612 | 2,553 | 3,243 |
+| starting without any heading | 738 | 628 | 1,348 | 892 |
+| only one text box | 725 | 619 | 1,763 | 1,466 |
+
+In *The Leader* three articles in four are now whole units. Most are complete reviews that were fragments before, for example of Wilkie Collins's *The Queen of Hearts*, Eugène Sue's *Les Enfants de l'amour* and Plato's *Republic*. The total grew by 11% (LDR) and 7% (MRP) despite leaving out the invented text. The *Monthly Repository* gains less: its layout misses many headings, so 417 of its units run over more than 3 pages and still give only their selected parts. Completing those would need a better way to find headings there.
+
+Known weaknesses:
+
+- When the next heading is missed, a whole unit can run on into an unrelated item. Three of the 12 Leader sample articles end with an unrelated paragraph (in one of them, invented text).
+- A list of new books opens with a book heading and can be taken whole (one sample article).
+
+### 8.3 Selection not widened (D-018)
+
+A clean test of widening was to take every unit that opens with a book heading but has no selected box. That would add about 244,000 words to the *Monthly Repository* (+47%), almost all reviews of sermons and theological tracts. It would add about 212,000 words to *The Leader* (+6%), mostly history, travel, science and politics, with a few news paragraphs caught by mistake. Few of these texts are reviews of fiction, so the selection stays as it is.
+
+### 8.4 New sample
+
+`corpus_sample/` (12 articles per periodical, drawn at random among articles of at least 1,500 characters, same seed as before). The comments are my reading of each text.
+
+| Article | Pages | Words | Boxes | Selected share | Whole unit | Heading | Comment |
+|---|---|---:|---:|---:|---|---|---|
+| LDR-1850-11-30-005 | 15;16 | 1661 | 9 | 0.79 | yes | LITERATUR. Critics are not the legislators, b | opening of the literature section (motto), then book reviews |
+| LDR-1851-05-17-011 | 18 | 536 | 3 | 0.99 | yes | \| \| DON GIOVANNI. | opera review (*Don Giovanni*) |
+| LDR-1851-09-27-002 | 14;15 | 1458 | 8 | 0.62 | yes | (heading in capitals) | literature column; first box ("The *Times* says…" on Trelawny's *Byron*, published 1858) is probably invented and was not caught (D-017) |
+| LDR-1852-01-17-008 | 21 | 442 | 4 | 0.76 | yes | . DREARY LANE! . | theatre column ("Dreary Lane!") |
+| LDR-1852-06-05-001 | 16 | 1175 | 7 | 0.54 | yes | A THOUGHT OR TWO ON THE BOOK QUESTION. | letter on the book trade; ends with part of another letter (missed heading) |
+| LDR-1852-06-05-008 | 22;23 | 1918 | 12 | 0.55 | yes | EGMONT AND THE GERMAN ACTORS. | theatre review (*Egmont* and the German actors) |
+| LDR-1854-06-24-002 | 14 | 655 | 4 | 0.98 | yes | KOSSUTH'S EDITION OF HIS OWN SPEECHES. (To th | Holyoake's letter on a cheap edition of Kossuth's speeches: publishing, little criticism |
+| LDR-1855-07-28-001 | 15 | 1302 | 4 | 0.63 | yes | (heading in capitals) | literature section: German High Art, then notices |
+| LDR-1856-03-08-005 | 16 | 1144 | 4 | 0.99 | yes | . - Chassez le naturel, il revient au galop | essay on criticism (Longinus) |
+| LDR-1857-02-14-007 | 20;21 | 1297 | 5 | 0.18 | yes | (heading in capitals) | review of the novel *Lucy Aylmer* and other notices; ends with a news paragraph probably invented (death of King Theodore, 1868); a loop box was left out |
+| LDR-1858-05-15-003 | 10 | 1068 | 3 | 0.70 | yes | (heading in capitals) | Musical Union concert notices; ends with an unrelated paragraph (missed heading) |
+| LDR-1859-01-08-008 | 23 | 1021 | 5 | 0.95 | yes | No. 459, January 8, 1859.] Fine Arts. | Fine Arts column |
+| MRP-1806-04-02-002 | 28 | 530 | 3 | 0.13 | no | 196 Original Letters by Dr. Franklin. | letters of Benjamin Franklin: false positive |
+| MRP-1806-04-02-004 | 53;54 | 2194 | 13 | 0.58 | yes | (heading in capitals) | "Literary" intelligence column, ending in news |
+| MRP-1808-09-02-001 | 1;2 | 718 | 3 | 0.59 | no | [Continued from p. 410.] [Continued from p. 4 | part of a long article on Bishop Hurd (unit of 7 pages) |
+| MRP-1808-10-02-006 | 50 | 331 | 1 | 1.00 | no | — | end of an obituary of a Greek professor: little criticism |
+| MRP-1822-03-02-001 | 26;27 | 494 | 2 | 1.00 | no | — | biblical exegesis: false positive |
+| MRP-1826-06-02-009 | 63;64 | 281 | 3 | 0.60 | yes | (book heading) | list of new publications: false positive |
+| MRP-1830-03-02-002 | 42 | 475 | 4 | 0.73 | no | — | middle of a review of a translator of poetry |
+| MRP-1831-08-02-005 | 53;54;55 | 1403 | 12 | 0.07 | yes | FRANCIS KNOWLES. | letter on a religious book; a box of invented text was left out |
+| MRP-1832-03-02-001 | 44;45;46;47;48;49 | 2259 | 10 | 0.52 | no | * See Systematic Morality, vol. ii, p. 69. | essay "The Poor and their Poetry"; its first box (invented, output limit) was left out |
+| MRP-1832-11-02-003 | 16 | 366 | 1 | 1.00 | no | — | part of a review of Reinhard's sermons on literary style |
+| MRP-1837-08-01-006 | 68;69 | 292 | 3 | 0.65 | no | — | notice of a book by Dr Nichol (no heading) |
+| MRP-1837-09-01-020 | 56;57;58 | 1180 | 8 | 0.13 | yes | (heading in capitals) | review of a tragedy, with quotations |
+
+Of the 24: about 17 are criticism or writing about the arts, 2 are about books and publishing with little criticism, 3 are clear false positives (Franklin's letters, biblical exegesis, a list of new books) and 2 are marginal (an obituary, a letter on a religious book). False positives do not dominate. All 12 Leader articles are whole units, but only 4 of the 12 *Monthly Repository* articles are; 5 of those still start without a heading. Two articles contain invented text that was not caught; three invented boxes inside sample articles were left out (listed in `corpus_sample/excluded_boxes.csv`).
+
+### 8.5 For approval (✋1)
+
+- the rebuild rule D-016 and the invented-text rule D-017 for the pilot;
+- leaving the selection unwidened (D-018);
+- the remaining weaknesses: *Monthly Repository* fragments, run-on endings, and short invented passages that are not caught.
+
+Then the next stage is to publish the corpus as release `corpus-v1.0`, with `excluded_boxes.csv` inside it.
+

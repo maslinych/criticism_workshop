@@ -18,14 +18,14 @@ A pipeline that builds a dataset of **evaluative statements about creators and t
 ## Code layout
 
 - `config.yaml`: all paths and settings. `src/ncse/cli.py`: the `ncse` command.
-- `source.py` loads NCSE boxes and joins labels; `rebuild.py` (pure functions, D-012) turns boxes into articles; `inspection.py` and `prepare.py` are the stage scripts; `runlog.py` logs counts to `logs/`.
+- `source.py` loads NCSE boxes, joins labels and marks invented text (`invented.py`, D-017); `rebuild.py` (pure functions, D-016) cuts issues into units at headings and turns them into articles; `inspection.py` and `prepare.py` are the stage scripts; `runlog.py` logs counts to `logs/`.
 - NCSE facts that the code relies on: an entry is a layout box, not an article. Labels come from separate classification parquets, joined on `bbox_uid = page_id + "_" + box_page_id`. Topics are multi-label. Only the LDR (Leader) and MRP (Monthly Repository) issue series are used (D-010, D-011).
 
 ## Read first, every session
 
 - `AGENTS.md`: binding working rules (git, documentation, reproducibility, LLM/code division, output checks, tests). Treat it as part of this file.
 - `STATUS.md`: stage table and next steps. Update it at the end of every session.
-- `docs/decisions.md`: decision log (append-only, IDs `D-xxx`; open questions `Q-1`…`Q-5`). Don't decide an open question silently: record a provisional decision or ask.
+- `docs/decisions.md`: decision log (append-only, IDs `D-xxx`; open questions `Q-1`…`Q-6`, of which Q-4 and Q-6 are answered). Don't decide an open question silently: record a provisional decision or ask.
 - `docs/annotation-guidelines.md` (*what* to annotate) and `docs/evidence-and-review.md` (*how sure*, and the reviewer's limits). These define the schema the code must enforce.
 
 ## Approval gates (✋): stop and report to the project owner
@@ -42,7 +42,7 @@ Stages are chained. Each reads the previous stage's output, runs with one comman
 
 1. **Acquire**: download NCSE v2.0 and record origin, date and checksum. Raw downloads are not committed.
 2. **Inspect & select**: initial rule (D-002, provisional) is text type = *article* AND topic = *Arts, culture, entertainment and media*. Known caveats: the labels are LLM-assigned and unverified, NCSE entries may be fragments smaller than articles (so articles must be rebuilt), and the text has OCR errors.
-3. **Prepare corpus** (D-007): one `.txt` per article (text only, no header, OCR unchanged, file name = article ID) plus `metadata.csv` (ID, file name, periodical, date/vol/no, pages, heading, length, NCSE labels, **the NCSE entry IDs it was built from**, rebuild notes). This corpus is the **only** input to all later stages, and quotations are matched against these files.
+3. **Prepare corpus** (D-007): one `.txt` per article (text only, no header, OCR unchanged, file name = article ID) plus `metadata.csv` (ID, file name, periodical, date/vol/no, pages, heading, length, NCSE labels, **the NCSE entry IDs it was built from**, rebuild notes) and `excluded_boxes.csv` (invented OCR text left out, with reasons; D-017). This corpus is the **only** input to all later stages, and quotations are matched against these files.
 4. **Analyst** LLM → 5. **code checks** → 6. **Reviewer** LLM → 7. **code checks of reviewer diff** → 8. **Assemble** CSV + data dictionary → 9. **Descriptive statistics**.
 
 There must also be a cheap **sample mode** that runs every stage on the corpus sample (`corpus_sample/`). Once the corpus is approved, it is published as a GitHub release and later stages fetch it (D-008); see README "Building the corpus or fetching the published one".

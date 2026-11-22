@@ -100,7 +100,7 @@ uv sync                 # installs Python packages into .venv/
 |---|---|---|
 | 1. Acquire | `uv run ncse acquire` | `data/raw/` (about 1.9 GB including unpacked files), `reports/acquire-manifest.json` |
 | 2. Inspect and select | `uv run ncse inspect` | `reports/01-data-inspection-tables.md` |
-| 3. Prepare the corpus | `uv run ncse prepare` | `data/corpus/full/` (texts + `metadata.csv`), `corpus_sample/`, `reports/02-corpus-summary.md` |
+| 3. Prepare the corpus | `uv run ncse prepare` | `data/corpus/full/` (texts, `metadata.csv`, `excluded_boxes.csv`), `corpus_sample/`, `reports/02-corpus-summary.md` |
 
 Each command writes a log to `logs/`. Running `acquire` again skips files that are already downloaded and checked. `prepare` always rebuilds the corpus from the downloaded data and gives the same result each time.
 

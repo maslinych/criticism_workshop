@@ -1,0 +1,4 @@
+ncse_entry_id,issue_id,page,reason,n_chars,selected,article_id,text_start
+MRP-1831-08-02_page_53_B0C2R6,MRP-1831-08-02,53,"output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part",8349,no,MRP-1831-08-02-005,"To the Editor. Sir,—I read with much interest the letter of your correspondent, ""A Farmer,"" in your issue of the 10th inst., and I think that he has n"
+MRP-1832-03-02_page_45_B0C1R2,MRP-1832-03-02,45,"output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part",8424,yes,MRP-1832-03-02-001,"THE POOR AND THEIR POETRY*. *This is a subject which has been much discussed of late, and which has been treated by some of the most eminent of our li"
+LDR-1857-02-14_page_21_B0C0R1,LDR-1857-02-14,21,loop: 98% of 8-word sequences are repeats,512,no,LDR-1857-02-14-007,SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME SAME 

@@ -69,11 +69,33 @@ Boxes meeting the rule: 2,169 of 77,838 (2.8%); characters: 2,194,811 of 72,620,
 
 Selected boxes with no selected neighbour on either side (isolated): 1,345 (62.0%).
 
-### Title segments and rebuilt articles
+### Boxes of text invented by the OCR model (D-017)
 
-Title segments (a title box and everything up to the next title): 7,013; pages per segment: median 2, 90th percentile 7, maximum 39.
+Text and title boxes that count as invented: 1,152 of 77,391 (5,552,995 of 72,620,101 characters); meeting the selection rule: 35.
 
-Articles rebuilt with the D-012 rule (max_gap = 2): 1,226; with heading: 488; only one text box: 725; with bridged boxes: 376.
+| test | boxes | selected | characters |
+|---|---|---|---|
+| loop | 573 | 9 | 1,702,717 |
+| output limit | 579 | 26 | 3,850,278 |
+
+Random sample of invented boxes meeting the selection rule:
+
+| box | reason | text (first 300 characters) |
+|---|---|---|
+| MRP-1809-04-02_page_40_B0C1R2 | loop: 46% of 8-word sequences are repeats | REVIEW. — The "Times" says of Mr. Disraeli's new novel, "Endymion," that it is "a work of great power and beauty." The "Morning Post" says: "We have read 'Endymion' with great pleasure. It is a work of high imaginative power, and of great beauty of style. We have no hesitation in saying that it is M |
+| MRP-1806-02-02_page_32_B0C1R2 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | REVIEW. — The "Times" says of Mr. Disraeli's new novel, "Endymion," that it is "a work of great power, and of great beauty." It is a work of great power, but we cannot say that it is a work of great beauty. It is a work of great power, because it is a work of great originality. It is a work of great |
+| MRP-1818-02-02_page_46_B2C0R2 | loop: 51% of 8-word sequences are repeats | REVIEW. THE LITERARY GAZETTE. THE NEW POETS.—We have received a volume of poems by Mr. W. H. Fitchett, entitled "The Wanderer's Home." The author is a young gentleman who has travelled much, and his poems are full of the spirit of travel. They are written in a simple and unaffected style, and are no |
+| MRP-1824-09-02_page_43_B2C0R2 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | REVIEW. THE LITERARY GAZETTE. THE NEW POETS.—The present is a prolific age for poets. The number of volumes of poetry published during the last few years is astonishing. The present generation of poets have been educated under the influence of Wordsworth, and have imbibed his principles of poetry. T |
+| MRP-1816-03-02_page_33_B3C2R7 | loop: 57% of 8-word sequences are repeats | THE MORNING ADVERTISER. TUESDAY, JANUARY 29, 1866. SIR,—I am grateful for the kind notice you have been pleased to take of my little book, and shall be happy to send you a copy, if you will be so good as to furnish me with your address.—I am, Sir, yours obediently, J. H. SIR,—I am glad to see that y |
+| MRP-1816-08-02_page_36_B1C0R1 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | 474 A SLEEPING CAR The London Times of October 26th says: A SLEEPING CAR The London Times of October 26th says: A SLEEPING CAR The London Times of October 26th says: A SLEEPING CAR The London Times of October 26th says: A SLEEPING CAR The London Times of October 26th says: A SLEEPING CAR The London  |
+| MRP-1813-08-02_page_39_B1C0R1 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | REVIEW. The "Times" says that the "Times" of the 19th century was a great improvement on the "Times" of the 18th century. The "Times" of the 19th century was a great improvement on the "Times" of the 18th century. The "Times" of the 19th century was a great improvement on the "Times" of the 18th cen |
+| MRP-1831-11-02_page_1_B1C0R3 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | REVIEW. THE NEW NOVELS. WE have received several new novels, which we shall notice in our next. Among them are "The Wreck of the Golden Mary," by Captain Marryat; "The Wife's Secret," by Mrs. Gore; "The Woman of the World," by Miss Trollope; "The Wife's Story," by Miss Trollope; "The Wife's Secret," |
+
+### Units and rebuilt articles
+
+Units (from one heading to the next): 9,572; pages per unit: median 2, 90th percentile 5, maximum 25. Units by the kind of heading they start with: (no heading: start of issue): 92; book heading: 528; heading in capitals: 1,675; numbered review: 366; title box: 6,911.
+
+Articles rebuilt with the D-016 rule: 1,240; whole units: 397; with a title box: 431; only one text box: 619.
 
 ### Random sample of boxes meeting the rule (possible false positives)
 
@@ -190,11 +212,33 @@ Boxes meeting the rule: 8,109 of 138,744 (5.8%); characters: 14,984,688 of 191,8
 
 Selected boxes with no selected neighbour on either side (isolated): 3,363 (41.5%).
 
-### Title segments and rebuilt articles
+### Boxes of text invented by the OCR model (D-017)
 
-Title segments (a title box and everything up to the next title): 21,909; pages per segment: median 1, 90th percentile 2, maximum 13.
+Text and title boxes that count as invented: 4,810 of 133,321 (28,571,404 of 191,823,838 characters); meeting the selection rule: 310.
 
-Articles rebuilt with the D-012 rule (max_gap = 2): 3,901; with heading: 2,553; only one text box: 1,763; with bridged boxes: 1,339.
+| test | boxes | selected | characters |
+|---|---|---|---|
+| loop | 1,722 | 101 | 4,896,254 |
+| output limit | 3,088 | 209 | 23,675,150 |
+
+Random sample of invented boxes meeting the selection rule:
+
+| box | reason | text (first 300 characters) |
+|---|---|---|
+| LDR-1851-06-07_page_15_B0C1R1 | loop: 72% of 8-word sequences are repeats | LITERATURE. — The following is a list of the principal works of fiction published during the present week:— " The Old Homestead," by Mrs. John H Kinzie. " The Old Homestead," by Mrs. John H Kinzie. " The Old Homestead," by Mrs. John H Kinzie. " The Old Homestead," by Mrs. John H Kinzie. " The Old Ho |
+| LDR-1850-06-29_page_16_B0C2R4 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | LITERATURE. — The "Monthly Chronicle" says of the "Life of Sir Walter Scott," by Lockhart, that it is "a work of great merit, and one which will be read with interest by all who are interested in the life and writings of the great Scottish novelist." The biography is said to be "full of anecdote and |
+| LDR-1853-10-01_page_17_B0C1R1 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | Literature. — The "Times" says that Mr. Longfellow's "Evangeline" is a poem which will live. It is a poem of great beauty, and has been received with great favor by the public. It is a poem which will live, because it is a poem which has been written from the heart. It is a poem which will live, bec |
+| LDR-1855-10-13_page_19_B0C1R2 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | INFLUENCE OF SCIENCE ON POETRY. The influence of science on poetry is a subject which has been often discussed, and which has been treated by many eminent critics. It is not proposed to enter into any general discussion of the question, but to consider briefly the influence of science on poetry, as  |
+| LDR-1852-03-13_page_23_B0C0R2 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | Success has rendered the manager of this theatre confident. He now produces his version of that terrible melodrama, *The Corsican Brothers*, and with it will harrow up formidable audiences. On the Kean does Oxford-street, and with it will harrow up the most fastidious friends." will be seen at the M |
+| LDR-1852-08-07_page_18_B0C1R4 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | ADVICE GRATIS. TO THE EDITOR OF THE "STANDARD." SIR,—I observe that the "Standard" has been lately occupied with the subject of the recently discovered "Mysteries of London." I am not aware that the "Standard" has ever before been so much interested in the subject of the Mysteries of London. I am no |
+| LDR-1851-08-09_page_19_B0C1R3 | output limit: the OCR model wrote 2000 tokens, the limit of 2000 per part | I admit some want of fitness condemns the costume, with that costume is trivial; I do not quarrel with the velvet dresses, or with that kind of dress, on any archaeological grounds; nor to the costume of the period. When I see in Titian's picture, the farquharines Superbus overcoming Lucretia, with  |
+| LDR-1858-06-26_page_20_B0C2R10 | loop: 43% of 8-word sequences are repeats | Ten Concert epidemic has of late been raging with solstitial severity in this metropolis. Where all the audiences come from, and, we may add, all the celebrities, vocal and instrumental, engaged in these annual campaigns, is a question we have never been able to solve. The Parisians (to whom Beethov |
+
+### Units and rebuilt articles
+
+Units (from one heading to the next): 34,889; pages per unit: median 1, 90th percentile 2, maximum 7. Units by the kind of heading they start with: (no heading: start of issue): 369; book heading: 676; heading in capitals: 12,364; numbered review: 3; title box: 21,477.
+
+Articles rebuilt with the D-016 rule: 4,135; whole units: 3,059; with a title box: 2,339; only one text box: 1,466.
 
 ### Random sample of boxes meeting the rule (possible false positives)
 
