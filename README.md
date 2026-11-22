@@ -110,7 +110,7 @@ Each command writes a log to `logs/`. Running `acquire` again skips files that a
 
 | Step | Command | What it writes |
 |---|---|---|
-| Fetch | `uv run ncse fetch` | `data/corpus/full/` (the same files as `prepare` writes, plus `FETCHED.json`) |
+| Fetch | `uv run ncse fetch` | `data/corpus/full/` (the same files as `prepare` writes, plus `CORPUS_README.md` and `FETCHED.json`) |
 
 `fetch` downloads the release named in `config.yaml` (`release:`), checks its SHA-256 checksum and unpacks it. Running it again does nothing if that version is already in place. It does not overwrite a locally built corpus unless you add `--force`.
 
