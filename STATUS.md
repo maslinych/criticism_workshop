@@ -20,7 +20,7 @@ Update this file at the end of every work session: what was done, what is next, 
 ## Next steps
 
 - Owner: name the LiteLLM models for analyst and reviewer (`annotation.*.model` in `config.yaml`) and set `LITELLM_BASE_URL` / `LITELLM_API_KEY`.
-- Smoke test: `uv run ncse analyse --sample --limit 2`, read the records, then `uv run ncse check analyst --sample`. Check that the service accepts `temperature`/`max_tokens`, whether `response_format: json_object` is supported, and the real token counts.
+- Smoke test: `uv run ncse analyse --sample --limit 2`, read the records, then `uv run ncse check analyst --sample`. Check that the service accepts `temperature`/`max_tokens`, that the chosen models support `response_format: json_object` (now the default for both steps; set it to `null` for a model that refuses it), and the real token counts.
 - Stage 7: pilot on the 24 articles of `corpus_sample/` (both steps, sample mode), then present the reports and a reading of the statements to the owner (✋3), with a cost estimate for the full run from `uv run ncse estimate`.
 
 ## Problems and observations
@@ -35,3 +35,4 @@ Update this file at the end of every work session: what was done, what is next, 
 - 2026-11-22 (stage 6): ✋2 approved, including the provisional scope rulings (D-023). Owner asked that both steps be checked for format and instruction adherence; strict rules reject, interpretive ones flag (D-025). Rough input estimate for the full analyst run: 5,375 requests, about 29 million input tokens, of which about 23 million are the instructions repeated in every request (4,300 tokens each); prompt caching by the service, if available, would cut that cost. Output tokens unknown until the pilot.
 - 2026-11-22: first smoke test refused with HTTP 404, unknown model `mistral-large-instruct`; nothing paid. Added `uv run ncse models` to list the service's model names.
 - 2026-11-22: second smoke test with `gwdg/meta-llama-3.1-8b-instruct` failed. The model wrote no JSON; it repeated one sentence until the length limit (about 2 minutes and 16k+ tokens per attempt). The 8B model looks too small for the prompt; owner to choose a stronger analyst model and delete `data/annotation/sample/analyst` before rerunning. Retries now send back only the beginning of a cut-off answer (D-026). The service reported 32,000 and 64,000 completion tokens with `max_tokens: 16000`: its token counts may be unreliable, check before estimating costs.
+- 2026-11-22: defaults changed for both steps: `response_format: json_object` (asks the service for bare JSON, against prose before the answer) and analyst `max_tokens: 8000` (was 16000; a looping answer is cut off sooner). The reviewer already had 8000.

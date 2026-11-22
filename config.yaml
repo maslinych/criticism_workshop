@@ -115,14 +115,14 @@ annotation:
     prompt_version: v1
     model: null          # to be chosen with the project owner
     temperature: 0
-    max_tokens: 16000
-    response_format: null
+    max_tokens: 8000
+    response_format: json_object
   reviewer:
     prompt_version: v1
     model: null          # may differ from the analyst's model (evidence-and-review.md, section 5)
     temperature: 0
     max_tokens: 8000
-    response_format: null
+    response_format: json_object
   max_retries: 2         # extra attempts after an answer fails the checks
   retry_echo_chars: 2000 # an answer cut off at the length limit is sent back with the retry
                          # only up to this many characters (D-026)
