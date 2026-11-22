@@ -236,6 +236,12 @@ Decision:
 Reason: in the smoke tests a 10,000-character article took the analyst 4 min 16 s, close to the service's limit of about 300 s, and some articles are longer; one long article should not stop a pilot or a full run. The reviewer accepted all 27 statements of the second analyst smoke test without a single action; without its reasoning there was no way to see whether it had considered the borderline cases.
 Consequences: `SlowAnswer` in `llm.py`; `StepRunner.too_slow` in `annotate.py`; tests in `tests/test_llm.py` and `tests/test_annotate.py`.
 
+**D-032 — Models for the pilot (provisional)**
+Date: 2026-11-22. Status: provisional, for the pilot (project owner); to be reviewed with the pilot results at ✋3.
+Decision: analyst and reviewer both use `jlu/qwen3.8-27b-fast`, a reasoning model, with reasoning left on (`reasoning_effort: null`, `extra: {}`), `temperature: 0`, `max_tokens: 32000` and `response_format: json_object`.
+Reason: in the smoke tests it was the only model that kept both recall and the scope rules (Don Giovanni notice: 6 of 6 clear evaluations, none out of scope). A small model produced no JSON; a mid-sized model without reasoning ignored the scope rules (26 of 28 statements deleted by the reviewer); the regular variant of the same model exceeded the service's time limit; another large model was not accessible with our key. `reasoning_effort: low` had no effect; turning reasoning off saved about a quarter of the analyst's time but lost recall (4 of 6) and added 13 out-of-scope statements. As reviewer the model's deletions were sound; with a strong analyst it made none, which may mean it shares the analyst's blind spots: read its stored reasoning on borderline cases in the pilot.
+Consequences: the pilot is run with `scripts/pilot.sh`. Watch in the pilot: articles failed as too slow (long articles), the reviewer's deletion rate, and output tokens per article for the cost estimate of the full run.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.

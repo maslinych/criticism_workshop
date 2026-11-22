@@ -120,7 +120,7 @@ raw_sample:
 annotation:
   analyst:
     prompt_version: v1
-    model: null          # to be chosen with the project owner
+    model: jlu/qwen3.8-27b-fast   # provisional choice for the pilot (D-032)
     temperature: 0
     max_tokens: 32000
     response_format: json_object
@@ -128,7 +128,7 @@ annotation:
     extra: {}
   reviewer:
     prompt_version: v1
-    model: null          # may differ from the analyst's model (evidence-and-review.md, section 5)
+    model: jlu/qwen3.8-27b-fast   # provisional, same as the analyst (D-032); may differ (evidence-and-review.md, 5)
     temperature: 0
     max_tokens: 32000    # reasoning models count their thinking in this limit
     response_format: json_object
