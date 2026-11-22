@@ -106,6 +106,34 @@ def now() -> str:
 # ---------------------------------------------------------------- one step
 
 
+REASONING_EFFORT = ("none", "minimal", "low", "medium", "high")
+# Request fields set by the code or by named settings; `extra` may not override them.
+RESERVED = {"model", "messages", "stream", "temperature", "max_tokens", "response_format", "reasoning_effort"}
+
+
+def request_settings(step_cfg: dict, step: str) -> dict:
+    """The model settings sent with every request of one step (D-030). They are
+    recorded with every attempt, so each answer's settings are known."""
+    settings = {k: step_cfg.get(k) for k in ("temperature", "max_tokens")}
+    if step_cfg.get("response_format"):
+        settings["response_format"] = {"type": step_cfg["response_format"]}
+    effort = step_cfg.get("reasoning_effort")
+    if effort is not None:
+        if effort not in REASONING_EFFORT:
+            raise SystemExit(f"annotation.{step}.reasoning_effort must be one of "
+                             f"{', '.join(REASONING_EFFORT)} or null, not {effort!r}")
+        settings["reasoning_effort"] = effort
+    extra = step_cfg.get("extra") or {}
+    if not isinstance(extra, dict):
+        raise SystemExit(f"annotation.{step}.extra must be a mapping of option names to values")
+    clash = sorted(RESERVED & set(extra))
+    if clash:
+        raise SystemExit(f"annotation.{step}.extra may not set {', '.join(clash)}; "
+                         "use the named settings in config.yaml for these")
+    settings.update(extra)
+    return settings
+
+
 class StepRunner:
     """Runs one step (analyst or reviewer) over a list of articles."""
 
@@ -118,9 +146,7 @@ class StepRunner:
         self.model = self.settings_cfg["model"]
         if not self.model:
             raise SystemExit(f"no model set for the {step}: fill in annotation.{step}.model in config.yaml")
-        self.settings = {k: self.settings_cfg.get(k) for k in ("temperature", "max_tokens")}
-        if self.settings_cfg.get("response_format"):
-            self.settings["response_format"] = {"type": self.settings_cfg["response_format"]}
+        self.settings = request_settings(self.settings_cfg, step)
         self.max_attempts = 1 + ann["max_retries"]
         self.echo_chars = ann["retry_echo_chars"]
         self.tolerance = Tolerance.from_config(cfg.get("quotes"))
@@ -272,6 +298,8 @@ class StepRunner:
             self.count("requests")
             self.count("prompt tokens", reply.usage.get("prompt_tokens", 0))
             self.count("completion tokens", reply.usage.get("completion_tokens", 0))
+            details = reply.usage.get("completion_tokens_details") or {}
+            self.count("reasoning tokens (part of completion)", details.get("reasoning_tokens") or 0)
             self.evaluate(attempt, text, analyst_result)
             save_record(self.out, record)
             if not attempt["accepted"]:

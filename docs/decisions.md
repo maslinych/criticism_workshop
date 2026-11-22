@@ -222,6 +222,12 @@ Decision:
 Reason: in a smoke test with `jlu/qwen3.8-27b`, a reasoning model, each request ended after about 300 seconds with HTTP 502, apparently the service's time limit for one answer. The code took this for a busy service and retried with growing pauses, so the run would have taken more than half an hour to give up. Ctrl-C did not stop it, because the main program waited for the requests running in the background.
 Consequences: code in `llm.py` and `annotate.py` (`StepRunner.interrupted`); setting `llm.slow_failure` in `config.yaml`; tests in `tests/test_llm.py` and `tests/test_annotate.py`.
 
+**D-030 — Turning reasoning down**
+Date: 2026-11-22. Status: adopted (project owner).
+Decision: each step has two more settings in `config.yaml`. `reasoning_effort` (`none`, `minimal`, `low`, `medium`, `high`, or `null` for the model default) is the standard option, which the LiteLLM service translates for models that support it. `extra` passes further options to the service unchanged, for models that are switched another way, e.g. `{chat_template_kwargs: {enable_thinking: false}}` for Qwen3 models served by vLLM. `extra` may not set what the code or the named settings set (model, messages, temperature, max_tokens, response_format, reasoning_effort, stream). Both are sent with every request and recorded with every attempt. The log now counts reasoning tokens, which the service reports as part of the completion tokens.
+Reason: reasoning models (`jlu/qwen3.8-27b`) thought for longer than the service allows for one answer (D-029), and as reviewer used up to 8,000 tokens on thinking. Whether a model honours either setting can only be seen in a run, through the reasoning-token count.
+Consequences: `request_settings` in `annotate.py`; tests in `tests/test_annotate.py`. Both settings are off (`null`, `{}`) by default.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.

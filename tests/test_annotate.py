@@ -267,3 +267,30 @@ def test_recheck_detects_a_changed_record(cfg):
     annotate.save_record(folder, rec)
     with pytest.raises(SystemExit, match="did not pass"):
         checkreport.run(cfg, "analyst", sample=True)
+
+
+def test_request_settings():
+    base = {"temperature": 0, "max_tokens": 100, "response_format": None}
+    assert annotate.request_settings(base, "analyst") == {"temperature": 0, "max_tokens": 100}
+    s = annotate.request_settings({**base, "reasoning_effort": "low",
+                                   "extra": {"chat_template_kwargs": {"enable_thinking": False}}}, "analyst")
+    assert s["reasoning_effort"] == "low"
+    assert s["chat_template_kwargs"] == {"enable_thinking": False}
+    with pytest.raises(SystemExit, match="reasoning_effort"):
+        annotate.request_settings({**base, "reasoning_effort": "a little"}, "analyst")
+    with pytest.raises(SystemExit, match="may not set max_tokens"):
+        annotate.request_settings({**base, "extra": {"max_tokens": 5}}, "analyst")
+
+
+def test_settings_are_sent_and_recorded(cfg):
+    cfg["annotation"]["analyst"].update(reasoning_effort="low", extra={"chat_template_kwargs": {"enable_thinking": False}})
+    seen = []
+
+    class Recording(FakeClient):
+        def chat(self, model, messages, settings):
+            seen.append(settings)
+            return super().chat(model, messages, settings)
+
+    analyse(cfg, Recording([good_answer()]))
+    assert seen[0]["reasoning_effort"] == "low"
+    assert record(cfg)["settings"]["chat_template_kwargs"] == {"enable_thinking": False}

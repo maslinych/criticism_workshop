@@ -110,6 +110,13 @@ raw_sample:
 #   max_tokens: upper limit on the length of one answer (null = model default).
 #   response_format: json_object asks the service to return bare JSON, if the model
 #     supports it (null = do not ask; the checks reject anything else either way).
+#   reasoning_effort: how long a reasoning model thinks before it answers: none, minimal,
+#     low, medium or high (null = model default). The LiteLLM service translates it for
+#     models that support it; others may ignore it (D-030).
+#   extra: further options passed to the service unchanged, for models that turn
+#     reasoning down another way. For Qwen3 models served by vLLM, for example:
+#       extra: {chat_template_kwargs: {enable_thinking: false}}
+#     Whether a setting works shows in the log: "reasoning tokens" should go down.
 annotation:
   analyst:
     prompt_version: v1
@@ -117,12 +124,16 @@ annotation:
     temperature: 0
     max_tokens: 32000
     response_format: json_object
+    reasoning_effort: null
+    extra: {}
   reviewer:
     prompt_version: v1
     model: null          # may differ from the analyst's model (evidence-and-review.md, section 5)
     temperature: 0
     max_tokens: 32000    # reasoning models count their thinking in this limit
     response_format: json_object
+    reasoning_effort: null
+    extra: {}
   max_retries: 2         # extra attempts after an answer fails the checks
   retry_echo_chars: 2000 # an answer cut off at the length limit is sent back with the retry
                          # only up to this many characters (D-026)
