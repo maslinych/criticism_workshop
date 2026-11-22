@@ -83,6 +83,31 @@ Each stage reads the output of the previous one and writes its own. Every stage 
 8. **Assemble.** Build the final tables and the data dictionary.
 9. **Describe.** Produce summary statistics.
 
+## Running the pipeline
+
+The pipeline is written in Python. Its software is managed with [uv](https://docs.astral.sh/uv/), a tool that installs the exact package versions recorded in `uv.lock` (decision D-009). Settings such as paths, the selection rule and sample sizes are in `config.yaml`.
+
+**Once, to set up:**
+
+```
+pip install uv          # or see the uv website for other ways to install it
+uv sync                 # installs Python packages into .venv/
+```
+
+**Building the corpus from source (stages 1–3):**
+
+| Stage | Command | What it writes |
+|---|---|---|
+| 1. Acquire | `uv run ncse acquire` | `data/raw/` (about 1.9 GB including unpacked files), `reports/acquire-manifest.json` |
+| 2. Inspect and select | `uv run ncse inspect` | `reports/01-data-inspection-tables.md` |
+| 3. Prepare the corpus | `uv run ncse prepare` | `data/corpus/full/` (texts + `metadata.csv`), `corpus_sample/`, `reports/02-corpus-summary.md` |
+
+Each command writes a log to `logs/`. Running `acquire` again skips files that are already downloaded and checked. `prepare` always rebuilds the corpus from the downloaded data and gives the same result each time.
+
+**Tests:** `uv run pytest` runs all tests. To run one test: `uv run pytest tests/test_rebuild.py::test_page_break_is_noted`.
+
+Later stages (fetch, annotation, review, assembly, statistics) will be added here as they are built.
+
 ## Building the corpus or fetching the published one
 
 The source data is large: about 900 MB, delivered as a single archive. The prepared corpus built from it is small, a few MB. Once the corpus is approved, it is therefore **frozen and published** as a versioned release (see "Publishing the corpus" below), and later stages work from that published version. There are two ways to obtain the prepared corpus, and both lead to the **same** files:

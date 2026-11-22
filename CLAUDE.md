@@ -6,7 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A pipeline that builds a dataset of **evaluative statements about creators and their works** from two 19th-century British periodicals (*The Monthly Repository*, 1806–1837; *The Leader*, 1850–1860) in the NCSE v2.0 OCR edition (CC BY 4.0, DOI 10.5522/04/28381610). An LLM **analyst** proposes annotations; a separate LLM **reviewer** may only delete them or lower their evidence level. It is also a teaching example for humanists, so documentation clarity matters as much as the code.
 
-**Current state: documentation only, no code yet.** No language, libraries, build, test or lint commands have been chosen. When you make those choices, record them in `docs/decisions.md`, put the exact run commands for every stage in `README.md`, and update this file with the build/test commands (including how to run a single test).
+**Current state:** stages 1–3 (acquire, inspect, prepare) are implemented in Python; later stages are not. Record new technical choices in `docs/decisions.md`, keep the exact run commands for every stage in `README.md` ("Running the pipeline"), and keep the commands below up to date.
+
+## Commands
+
+- Setup: `uv sync` (uv manages Python and packages; D-009)
+- Stages: `uv run ncse acquire`, `uv run ncse inspect`, `uv run ncse prepare`
+- All tests: `uv run pytest`; one test: `uv run pytest tests/test_rebuild.py::test_page_break_is_noted`
+- No linter is configured.
+
+## Code layout
+
+- `config.yaml`: all paths and settings. `src/ncse/cli.py`: the `ncse` command.
+- `source.py` loads NCSE boxes and joins labels; `rebuild.py` (pure functions, D-012) turns boxes into articles; `inspection.py` and `prepare.py` are the stage scripts; `runlog.py` logs counts to `logs/`.
+- NCSE facts that the code relies on: an entry is a layout box, not an article. Labels come from separate classification parquets, joined on `bbox_uid = page_id + "_" + box_page_id`. Topics are multi-label. Only the LDR (Leader) and MRP (Monthly Repository) issue series are used (D-010, D-011).
 
 ## Read first, every session
 
@@ -32,7 +45,7 @@ Stages are chained. Each reads the previous stage's output, runs with one comman
 3. **Prepare corpus** (D-007): one `.txt` per article (text only, no header, OCR unchanged, file name = article ID) plus `metadata.csv` (ID, file name, periodical, date/vol/no, pages, heading, length, NCSE labels, **the NCSE entry IDs it was built from**, rebuild notes). This corpus is the **only** input to all later stages, and quotations are matched against these files.
 4. **Analyst** LLM → 5. **code checks** → 6. **Reviewer** LLM → 7. **code checks of reviewer diff** → 8. **Assemble** CSV + data dictionary → 9. **Descriptive statistics**.
 
-There must also be a cheap **sample mode** that runs every stage on a handful of articles for workshop participants.
+There must also be a cheap **sample mode** that runs every stage on the corpus sample (`corpus_sample/`). Once the corpus is approved, it is published as a GitHub release and later stages fetch it (D-008); see README "Building the corpus or fetching the published one".
 
 ## Annotation model (what the validators enforce)
 
