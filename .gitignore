@@ -1,0 +1,10 @@
+# Downloaded and generated data (reproducible from scripts; see README)
+data/
+logs/
+# Credentials
+.env
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

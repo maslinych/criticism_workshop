@@ -1,0 +1,51 @@
+# Project configuration: every path, source file and setting in one place.
+# Paths are relative to the project folder.
+
+source:
+  title: "NCSE v2.0: A Dataset of OCR-Processed 19th Century English Newspapers"
+  author: "Jonathan (Jonno) Bourne"
+  year: 2025
+  doi: "10.5522/04/28381610"
+  figshare_version: 1
+  licence: "CC BY 4.0"
+  # Files downloaded by `ncse acquire`. md5 values are the checksums published on figshare.
+  files:
+    - name: NCSE_v2.zip
+      url: https://ndownloader.figshare.com/files/52260821
+      md5: 7438b975c76783e777b7704ea7ddcf8c
+      size: 817784124
+    - name: classification_data.zip
+      url: https://ndownloader.figshare.com/files/52260923
+      md5: b6452f60b4c27a5ca96a892a979ab5a3
+      size: 153326947
+    - name: class_mappings.zip
+      url: https://ndownloader.figshare.com/files/52260941
+      md5: 53e432fdd652a37c65641cbc2a04730e
+      size: 750
+
+paths:
+  raw: data/raw              # downloads and unpacked files (not in git)
+  interim: data/interim      # intermediate files from inspection (not in git)
+  corpus: data/corpus/full   # the full prepared corpus (not in git; rebuilt by script)
+  corpus_sample: corpus_sample  # small fixed sample corpus (in git; for sample mode and tests)
+  reports: reports           # generated reports (in git)
+  logs: logs                 # run logs (not in git)
+
+# The two periodicals. `code` is used in article identifiers.
+# `match` is a piece of text that identifies the periodical's files in the download.
+periodicals:
+  - name: The Monthly Repository
+    code: MRP
+    match: TBD   # filled in after inspection
+  - name: The Leader
+    code: LDR
+    match: TBD
+
+# Selection rule D-002 (provisional).
+selection:
+  text_type: article
+  topic: "Arts, culture, entertainment and media"
+
+sample:
+  articles_per_periodical: 5
+  seed: 1850

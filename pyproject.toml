@@ -1,0 +1,25 @@
+[project]
+name = "ncse"
+version = "0.1.0"
+description = "Pipeline for a dataset of evaluative statements about the arts in two 19th-century periodicals (NCSE v2.0)"
+authors = [{ name = "Kirill Maslinsky" }]
+requires-python = ">=3.12"
+dependencies = [
+    "polars>=2.1.0",
+    "pyyaml>=6.0.4",
+]
+
+[project.scripts]
+ncse = "ncse.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
