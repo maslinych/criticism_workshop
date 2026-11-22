@@ -66,16 +66,18 @@ Never ask the LLM to count, sort, convert formats or check its own output format
 Every response from the LLM is checked by code before it is accepted.
 
 - **Format.** The response has the agreed structure, all required fields are present, and controlled fields use only the allowed values.
-- **Fidelity to the source.** Every quotation is a verbatim passage of the source text, meaning the article's text file in the prepared corpus. Paraphrases, "tidied" quotations, corrected OCR errors and text that does not exist in the source are rejected. The evaluative word or phrase must occur inside its quotation.
-  - The matching may ignore only trivial differences such as whitespace and line breaks. These tolerances must be written down in `docs/decisions.md`.
+- **Fidelity to the source.** Every quotation must match a passage of the source text, meaning the article's text file in the prepared corpus, and the evaluative word or phrase must occur inside its quotation. Paraphrases and text that does not exist in the source are rejected.
+  - The matching has three levels (D-022): *exact* (only whitespace differs); *normalised* (punctuation, the form of quotation marks, line breaks, hyphenation and capitals are ignored, as long as the words stay the same); *approximate* (a few changed characters, such as a corrected OCR error; accepted but flagged). Loose matches must begin and end at word boundaries. The level is recorded.
+  - The dataset always uses the exact source text that a quotation matched, never the model's copy. The source texts themselves are never corrected (D-006).
 - **Consistency with evidence levels.** A value marked as *observed* (directly stated) should be findable in the text. If it is not, the statement is flagged.
 - **Reviewer limits.** The reviewer's output is compared with the analyst's. Any change other than an allowed deletion or downgrade is rejected (see `docs/evidence-and-review.md`).
 
-**When a check fails:**
+**When a check fails** (D-023):
 
 1. Log the failure.
-2. Retry the request a limited number of times.
-3. If it still fails, mark the item as failed and report it.
+2. If the response as a whole is unusable (empty, not JSON, wrong structure, cut off at the length limit), retry the request a limited number of times. If the model returns exactly the same response again, stop retrying. Do not send a long cut-off response back with the retry; its beginning is enough.
+3. A single passage or statement that fails a check does not make the whole response fail: set it aside with its reasons, keep and report it, and accept the rest. The reviewer's response is the exception: any action outside its limits rejects it as a whole.
+4. If the response still fails after the last retry, mark the article as failed and report it.
 
 Never fix an LLM output by hand. Never drop a failed item silently.
 
@@ -90,8 +92,10 @@ Never fix an LLM output by hand. Never drop a failed item silently.
 ## 8. Cost and access
 
 - Credentials for the LiteLLM service come from environment variables.
-- Estimate the number of requests and tokens before any large run, and report the estimate to the project owner.
-- Respect rate limits. A failed or interrupted run should not lose money or work.
+- Read `docs/llm-service.md` before writing the code that calls the LLM. It records what went wrong in a test round with this service: answers longer than expected, reasoning that uses up the output limit, the service's time limit for one answer, models listed but not accessible, and runs that could not be stopped.
+- Before choosing models, run both steps on one or two sample articles with each candidate and read the results. Judge recall first: the reviewer can delete statements but never add the ones the analyst missed.
+- Estimate the number of requests and tokens before any large run, and report the estimate to the project owner. Output and reasoning tokens per article can only be estimated from a pilot; time is roughly output tokens divided by the model's writing speed.
+- Respect rate limits. A failed or interrupted run should not lose money or work. Requests, their settings and the error handling follow D-024.
 
 ## 9. Things not to do
 
@@ -105,7 +109,7 @@ Never fix an LLM output by hand. Never drop a failed item silently.
 
 A quick map of the project for coding agents and new contributors. The rules above take precedence.
 
-**Current state.** Stages 1–4 are done: the corpus is built and published as release `corpus-v1.0`, `uv run ncse fetch` downloads it, and `raw_sample/` lets stages 2–3 run and be tested without the download. The annotation stages are not built yet; `STATUS.md` lists the next steps.
+**Current state.** Stages 1–4 are done: the corpus is built and published as release `corpus-v1.0`, `uv run ncse fetch` downloads it, and `raw_sample/` lets stages 2–3 run and be tested without the download. The annotation stages are not built yet; `STATUS.md` lists the next steps. A trial version of them was tested against the LLM service: its lessons are in `docs/llm-service.md` and decisions D-022 to D-024, which bind the implementation.
 
 **Commands**
 
@@ -142,6 +146,7 @@ Give a request and token cost estimate before the full run.
 - Each stage logs the items processed, skipped, failed and retried, and the requests and tokens used.
 - A cheap *sample mode* runs every stage on `corpus_sample/`.
 - The prepared corpus is the only input; quotations are matched against its text files.
+- Requests ask for JSON through the interface (`response_format`), with a generous output limit; gateway errors after a long wait are not retried; Ctrl-C must stop a run (D-024, `docs/llm-service.md`).
 
 **What the validators must enforce** (from `docs/annotation-guidelines.md` and `docs/evidence-and-review.md`)
 
@@ -149,5 +154,6 @@ Give a request and token cost estimate before the full run.
 - **Fields:** `quote`, `creator`, `art`, `work_title`, `work_genre`, `evaluative_expression`, `polarity`, `sarcastic`, `criterion`, `quoted_source`, plus evidence levels and assumptions. The final names are fixed in the data dictionary.
 - **Controlled values:** art ∈ {literature, music, theatre, visual art, other}; polarity ∈ {positive, negative}; sarcastic ∈ {yes, no}; criterion ∈ {aesthetic value, moral value, usefulness, novelty, tradition}; evidence ∈ {observed, inferred, suggested}.
 - **Evidence** (D-004): each filled field has a level. *Inferred* and *suggested* need assumptions; the quote is always *observed*. A statement's level is the lowest of its fields.
-- **Quotations:** a quote is a verbatim passage of the article's text file, and `evaluative_expression` occurs inside it. Only documented trivial differences are tolerated (whitespace and line breaks; others are open question Q-5).
+- **Quotations** (D-022): a quote matches a passage of the article's text file, and `evaluative_expression` occurs inside it, at one of three levels: exact, normalised (punctuation, quotation marks, line breaks, hyphenation, capitals ignored) or approximate (a few changed characters, flagged). Record the level and the exact source text.
+- **Partial acceptance** (D-023): a failed passage or statement is set aside with its reasons; only a response that is unusable as a whole is retried.
 - **Reviewer changes** (D-005): only deleting a field or statement (marked `DELETED`, with a reason) and downgrading a level (observed→inferred, inferred→suggested, observed→suggested, with a reason). Any added statement, changed value, rewritten text or raised level is rejected. Deleted statements stay in the final table.

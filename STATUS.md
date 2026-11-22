@@ -19,7 +19,7 @@ Update this file at the end of every work session: what was done, what is next, 
 
 ## Next steps
 
-- Stage 5: draft analyst and reviewer prompts and the output format (✋2).
+- Stage 5: draft analyst and reviewer prompts and the output format (✋2). Before that, read `docs/llm-service.md` and decisions D-022 to D-024: they record what a test round of the annotation stages showed and how answers are to be checked.
 
 ## Problems and observations
 
@@ -29,3 +29,4 @@ Update this file at the end of every work session: what was done, what is next, 
 - Many rebuilt articles were fragments. Review titles in *The Leader* are usually the first words of a text box, not title boxes; with these headings recognised, 3,059 of 4,135 Leader articles are now whole units (D-016). The *Monthly Repository* still has many fragments, because its layout misses headings (417 units over 3 pages).
 - 2026-11-22 (second session): owner's answers recorded as D-016 to D-018. No balancing of the two periodicals in the pilot or statistics.
 - The *Monthly Repository* gives about 0.5 million words, *The Leader* about 3 million.
+- 2026-11-22: a trial version of the annotation stages was tested against the LiteLLM service with several models. Lessons in `docs/llm-service.md`; decisions D-022 (three levels of quotation matching, answers Q-5), D-023 (set aside failed statements instead of rejecting whole answers), D-024 (JSON through the interface, generous output limit, reasoning on, error handling, Ctrl-C).

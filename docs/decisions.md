@@ -138,6 +138,43 @@ Decision: `uv run ncse sample-raw` writes `raw_sample/`, committed to git. It ho
 Reason: D-008 asks for a raw sample that lets stages 2–3 be tested and understood without the 1 GB download. CSV can be read without special tools and keeps the OCR text exactly (tested on line breaks, quotation marks and empty texts). Copying whole pages, not just the article's boxes, keeps the context the rebuild rule depends on: headings, neighbouring boxes and unit length.
 Consequences: 172 boxes on 18 pages, about 320 KB. Articles other than the chosen 12 that appear on the same pages may be cut off at the edge of the copied pages.
 
+## Decisions from a test round of the annotation stages
+
+A trial version of the analyst and reviewer steps was run against the LiteLLM service with several models, on articles of the corpus sample. The practical lessons are in `docs/llm-service.md`; these decisions follow from them and bind the implementation of stages 4–7.
+
+**D-022 — Quotation matching in three levels (answers Q-5)**
+Date: 2026-11-22. Status: adopted (project owner).
+Decision: a quotation is matched against the article's text file, and an evaluative expression against the text of its quotation, at the strictest of three levels that succeeds. The level is recorded with every passage and statement.
+- *Exact*: the same characters; only whitespace may differ (any run of spaces, tabs and line breaks counts as one space; spaces at the start and end are ignored).
+- *Normalised*: the same letters and digits in the same order, ignoring every other character and capital letters. This accepts differences in punctuation, the form of quotation marks and dashes, line breaks, words broken by a hyphen at a line end, and capitals, as long as the words stay the same. Accepted without a flag.
+- *Approximate*: as *normalised*, but a few letters or digits may differ (inserted, left out or replaced), as when the model silently corrects an OCR error or makes a typo. Accepted with a flag. The allowance depends on length: at most 3 characters, and at most 5% of the letters and digits of the quoted text, so phrases under 20 letters get none. Both numbers are settings in the configuration file.
+
+A normalised or approximate match must begin and end at word boundaries in the text, so that a changed letter cannot turn "any ground" into "no ground". Whatever the level, the code records where the match lies in the text file and the exact text found there; **the dataset uses that source text, never the model's copy**, so traceability (README) and D-006 hold. The tolerance used is stored with the results, so that re-checking later gives the same outcome. The prompt still asks the model to copy exactly; the tolerance is not mentioned to it.
+Reason: in the test round, quotations failed almost only where the model tidied the text at a break in the corpus. It dropped a stray full stop between two text boxes, joined a hyphen-broken word, or left out a semicolon inside quotation marks; none of these changes a word. Rejecting them lost good statements. The word-boundary rule was added after a test showed that "no ground for supposing" would otherwise match "any ground for supposing" with one changed letter.
+Consequences: `AGENTS.md`, section 6, describes the rule. The quotation matcher needs tests for each level and for the word-boundary rule.
+
+**D-023 — Checking LLM answers: rejected answers and set-aside items**
+Date: 2026-11-22. Status: adopted (project owner).
+Decision:
+- Only a problem with the analyst's answer **as a whole** rejects it and leads to a retry: it is empty, is not a bare JSON object, is not valid JSON, does not match the agreed structure, or was cut off at the length limit.
+- A **passage** whose quotation is not found is set aside together with its statements. A **statement** that breaks a rule (its evaluative expression is not in its quotation, it has no target, an evidence rule is broken, a value is badly formed) is set aside alone. Set-aside items are kept with their reasons and with what the model wrote, counted in the log and listed in the stage report, but they do not enter the dataset. They are not retried. Items keep their numbers, so that passage 4 stays passage 4 when passage 3 is set aside, and everything can be traced back to the raw answer.
+- If the model returns exactly the same answer as in the previous attempt, no further attempt is made and the article is marked failed with that reason.
+- When an answer was cut off at the length limit, the retry sends back only its beginning (a couple of thousand characters), not the whole answer.
+- The reviewer's answer is still accepted or rejected as a whole (D-005): any action outside its limits rejects it. The reviewer sees only accepted statements.
+Reason: in the test round, a good answer of 30 statements was rejected entirely because 2 failed a check, and the retry cost a full answer. Asked to correct listed problems, one model returned the identical answer twice. A model caught in a loop wrote 70,000 characters; sending them back with the retry quadrupled the next request, and the model looped again. `AGENTS.md`, section 6, still holds: no failure is fixed by hand or dropped silently.
+Consequences: `AGENTS.md`, section 6, describes the procedure.
+
+**D-024 — Requests to the LLM service**
+Date: 2026-11-22. Status: adopted (project owner).
+Decision:
+- **JSON through the interface.** Requests ask for JSON with the interface setting `response_format: {"type": "json_object"}`, in addition to the instruction in the prompt and the checks in code. It can be switched off in the configuration for a model that refuses it.
+- **Settings in the configuration**, per step: model, `temperature` (0), a generous `max_tokens` (32,000 in the tests; reasoning counts against it), `reasoning_effort`, and a place for further model-specific options passed on unchanged. All settings sent are recorded with every answer.
+- **Reasoning stays on** for reasoning models unless a test shows that turning it down keeps recall (`docs/llm-service.md`, section 1). The reasoning-token count is logged, and the reasoning text is stored with the answer if the service returns it.
+- **Errors.** Quick "busy" answers (HTTP 429, 5xx) are retried after a growing pause and do not count as attempts. A gateway error (HTTP 502 or 504) or time-out that comes after a long wait (about 2 minutes, a setting) is not retried: that article is marked failed with the reason and the run goes on; several such failures in a row stop the run. Other refusals (wrong key, no access, unknown model) stop the run at once with a message saying what to check.
+- **Stopping.** Ctrl-C sends no new request and ends any pause at once; answers already being paid for are saved if possible, and a second Ctrl-C quits at once. Every answer is saved as soon as it arrives, before it is checked.
+Reason: see `docs/llm-service.md`. In short: without the JSON setting, models wrote text before the JSON; an output limit of 8,000 tokens was too small for both answer and reasoning; turning reasoning off cost recall; the service gives up on an answer after about 300 seconds, and retrying such requests wasted half an hour; Ctrl-C did not stop a run whose requests ran in the background.
+Consequences: the model choice itself is left to the smoke test and the pilot; `docs/llm-service.md` says what to look for.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.
@@ -146,7 +183,7 @@ These should be settled during or after the pilot, then recorded as decisions.
 - **Q-2. Other targets.** How are evaluations of exhibitions, theatres, concerts as events, editions and translations treated?
 - **Q-3. The `other` category for art.** Opera could count as music or theatre, and book illustration as literature or visual art. Which rules apply to such boundary cases, and does `other` stay as a category?
 - **Q-4. Selection beyond the topic label.** *(Answered: D-018.)* Should texts labelled with other topics (e.g. *Religion*, *Education*) that contain reviews be added? If so, how are they identified?
-- **Q-5. Quotation matching tolerances.** Which trivial differences may the quotation check ignore, beyond whitespace and line breaks?
+- **Q-5. Quotation matching tolerances.** *(Answered: D-022.)* Which trivial differences may the quotation check ignore, beyond whitespace and line breaks?
 - **Q-6. Text the OCR model invented.** *(Answered: D-017.)* NCSE v2.0 was read by an image-to-text model, which sometimes adds text that is not on the page: invented newspaper headers (for example "TUESDAY, AUGUST 20, 1861" on an 1851 page), sentences repeated in a loop, and remarks addressed to the user ("Certainly! Below is the extracted table…"). Should such passages be detected and excluded, flagged in the metadata, or left alone? For now they are left in the text unchanged (D-006).
 
 **Notes on Q-4 from the data inspection (2026-11-22).** The Leader opens its literature section with the motto "Critics are not the legislators, but the judges and police of literature". Boxes with this motto are sometimes labelled *education* or *religion* rather than arts. *Monthly Repository* reviews of theological books ("Art. III.—Religious Liberty Stated and Enforced… By Thomas Williams") are labelled *religion*. Section headings and review formulas ("Art. N.—", "By … pp.") could find such reviews. See `reports/01-data-inspection.md`.

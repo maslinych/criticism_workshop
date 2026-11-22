@@ -36,7 +36,7 @@ Each statement has the following fields. The words in italics are suggested fiel
 
 | Field | What to record |
 |---|---|
-| **Quotation** (*quote*) | The passage containing the statement, **copied exactly from the text**, in full: at least the whole sentence, more if needed to understand the statement. OCR errors are copied as they are. |
+| **Quotation** (*quote*) | The passage containing the statement, **copied exactly from the text**, in full: at least the whole sentence, more if needed to understand the statement. OCR errors are copied as they are. (The checking code tolerates differences that leave the words unchanged, and the dataset stores the exact text of the source; see D-022.) |
 | **Creator** (*creator*) | The name of the person judged or whose work is judged, as written in the text (e.g. "Mr. Tennyson", "the author of *Jane Eyre*"). Empty if unknown. |
 | **Art** (*art*) | One of: `literature`, `music`, `theatre`, `visual art` (painting, sculpture, engraving, architecture, etc.). If none fits, use `other` and explain in a note; such cases are collected and settled in `decisions.md`. |
 | **Work title** (*work_title*) | The title of the work being judged, as written in the text. Empty if the statement is about a creator or a genre in general. |

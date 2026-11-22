@@ -77,7 +77,7 @@ Each stage reads the output of the previous one and writes its own. Every stage 
 2. **Inspect and select.** Describe the structure of the data, apply the selection rule, rebuild articles, and report what was selected and what problems were found.
 3. **Prepare the corpus.** Write the selected articles out as a **readable corpus**: one plain-text file per article plus a metadata table (see "The prepared corpus" below). This corpus is the only input to annotation. Everything later refers to it, not to the original NCSE files.
 4. **Annotate (analyst).** The LLM proposes evaluative statements following `docs/annotation-guidelines.md` and `docs/evidence-and-review.md`.
-5. **Check.** Scripts verify the analyst's output: correct format, quotations that match the source exactly, and allowed values only.
+5. **Check.** Scripts verify the analyst's output: correct format, quotations that match the source (only differences that leave the words unchanged are tolerated, and the exact source text is kept; D-022), and allowed values only. A statement that fails is set aside with its reasons; the rest of the answer is kept (D-023).
 6. **Review (reviewer).** A separate LLM call deletes or downgrades statements according to `docs/evidence-and-review.md`.
 7. **Check again.** Scripts verify that the reviewer only made allowed changes.
 8. **Assemble.** Build the final tables and the data dictionary.
@@ -255,6 +255,7 @@ Annotation runs through the university's **LiteLLM** service, which offers an Op
 - Access credentials are read from the environment and are never written into code or committed to version control.
 - The model name, settings and prompt version are recorded for every annotation.
 - Before the full run, the expected number of requests and tokens is estimated and reported to the project owner.
+- Models are chosen by trying them on a few sample articles before the pilot. `docs/llm-service.md` describes what a test round with this service showed: which kinds of model could do the task, how long answers take, the service's time limit for one answer, and how to request JSON and handle errors (D-024).
 
 ## Development sequence and approval points
 
@@ -279,6 +280,7 @@ The pipeline should also run in a cheap **sample mode** on the corpus sample, so
 | `docs/annotation-guidelines.md` | **What** to annotate: the evaluative statement and its fields |
 | `docs/evidence-and-review.md` | **How sure** we are: evidence levels and the analyst/reviewer protocol |
 | `docs/decisions.md` | Log of decisions, including how particular annotation cases are handled |
+| `docs/llm-service.md` | Practical lessons for calling the LLM service: choosing models, request settings, time, errors |
 | `STATUS.md` | Current progress, next steps and open problems |
 
 The two files in `docs/` that describe the annotation are written so that they can be reused in other annotation projects with few changes.
