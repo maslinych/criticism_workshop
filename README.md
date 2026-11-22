@@ -102,6 +102,8 @@ uv sync                 # installs Python packages into .venv/
 | 2. Inspect and select | `uv run ncse inspect` | `reports/01-data-inspection-tables.md` |
 | 3. Prepare the corpus | `uv run ncse prepare` | `data/corpus/full/` (texts, `metadata.csv`, `excluded_boxes.csv`), `corpus_sample/`, `reports/02-corpus-summary.md` |
 
+To refresh the raw NCSE sample (`raw_sample/`, test data for stages 2–3; needs the download), run `uv run ncse sample-raw` after stage 1.
+
 Each command writes a log to `logs/`. Running `acquire` again skips files that are already downloaded and checked. `prepare` always rebuilds the corpus from the downloaded data and gives the same result each time.
 
 **Tests:** `uv run pytest` runs all tests. To run one test: `uv run pytest tests/test_rebuild.py::test_page_break_is_noted`.
@@ -134,7 +136,7 @@ From stage 4 on, nothing depends on which way the corpus was obtained.
 
 **Samples in the repository.** Two small samples are committed as plain files:
 
-- **Raw sample:** a few hundred original NCSE entries (the actual rows of the source data), covering about a dozen complete articles. It serves as test data for the selection and article-rebuilding scripts (stages 2–3), so that they can be tested and understood without the full download.
+- **Raw sample** (`raw_sample/`): a few hundred original NCSE entries (the actual rows of the source data), covering about a dozen complete articles. It serves as test data for the selection and article-rebuilding scripts (stages 2–3), so that they can be tested and understood without the full download. It has the same folder layout as the download, with CSV files instead of parquet; `raw_sample/README.md` explains how it was drawn.
 - **Corpus sample:** 20–30 prepared articles (text files plus their `metadata.csv` rows) drawn from the published corpus. It is used for quick, cheap test runs of the annotation, check and review stages (see "sample mode" below).
 
 The samples are produced by scripts, not chosen or edited by hand, and the scripts record how they were drawn.
