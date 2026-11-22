@@ -30,6 +30,8 @@ paths:
   corpus_sample: corpus_sample  # small fixed sample corpus (in git; for sample mode and tests)
   reports: reports           # generated reports (in git)
   logs: logs                 # run logs (not in git)
+  dist: dist                 # corpus release package made by `ncse package` (not in git)
+  downloads: data/downloads  # corpus release downloaded by `ncse fetch` (not in git)
 
 # The two periodicals.
 #   file:   the name the NCSE files use for this periodical
@@ -47,6 +49,15 @@ periodicals:
     file: Leader
     series: [LDR]
     code: LDR
+
+# The published corpus (D-008, D-019). Download address:
+#   https://github.com/<repository>/releases/download/corpus-v<version>/ncse-arts-corpus-v<version>.zip
+release:
+  repository: maslinych/criticism_workshop
+  version: "1.0"
+  # SHA-256 checksum of the published zip. Filled in after publishing, so that `ncse fetch`
+  # checks the download against this value; until then it uses the published .sha256 file.
+  sha256: null
 
 # Selection rule D-002 (provisional): NCSE text type and topic labels, as named in
 # the NCSE class mapping files.

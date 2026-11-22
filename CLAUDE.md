@@ -11,14 +11,14 @@ A pipeline that builds a dataset of **evaluative statements about creators and t
 ## Commands
 
 - Setup: `uv sync` (uv manages Python and packages; D-009)
-- Stages: `uv run ncse acquire`, `uv run ncse inspect`, `uv run ncse prepare`
+- Stages: `uv run ncse acquire`, `uv run ncse inspect`, `uv run ncse prepare`; `uv run ncse package` (release zip in `dist/`), `uv run ncse fetch` (download the published corpus instead of building it). Publishing (tag, push, GitHub release) is done by the project owner by hand; never publish yourself (D-019).
 - All tests: `uv run pytest`; one test: `uv run pytest tests/test_rebuild.py::test_page_break_is_noted`
 - No linter is configured.
 
 ## Code layout
 
 - `config.yaml`: all paths and settings. `src/ncse/cli.py`: the `ncse` command.
-- `source.py` loads NCSE boxes, joins labels and marks invented text (`invented.py`, D-017); `rebuild.py` (pure functions, D-016) cuts issues into units at headings and turns them into articles; `inspection.py` and `prepare.py` are the stage scripts; `runlog.py` logs counts to `logs/`.
+- `source.py` loads NCSE boxes, joins labels and marks invented text (`invented.py`, D-017); `rebuild.py` (pure functions, D-016) cuts issues into units at headings and turns them into articles; `inspection.py` and `prepare.py` are the stage scripts; `release.py` (package) and `fetch.py` handle the corpus release; `runlog.py` logs counts to `logs/`.
 - NCSE facts that the code relies on: an entry is a layout box, not an article. Labels come from separate classification parquets, joined on `bbox_uid = page_id + "_" + box_page_id`. Topics are multi-label. Only the LDR (Leader) and MRP (Monthly Repository) issue series are used (D-010, D-011).
 
 ## Read first, every session

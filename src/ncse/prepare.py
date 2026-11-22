@@ -12,6 +12,8 @@ as long as the source data and config.yaml are unchanged.
 """
 
 import csv
+import datetime as dt
+import json
 import re
 import random
 import shutil
@@ -230,7 +232,14 @@ def run(cfg: dict) -> None:
         excluded += e
 
     write_corpus(rows, excluded, cfg["paths"]["corpus"])
-    log.info(f"full corpus written to {cfg['paths']['corpus']}")
+    # Provenance of the full corpus: which code built it (checked by `ncse package`).
+    from .release import git_state
+
+    build = {**git_state(), "built": dt.datetime.now().isoformat(timespec="seconds"), "articles": len(rows)}
+    (cfg["paths"]["corpus"] / "BUILD.json").write_text(json.dumps(build, indent=2) + "\n")
+    (cfg["paths"]["corpus"] / "FETCHED.json").unlink(missing_ok=True)  # now built locally, not fetched
+    log.info(f"full corpus written to {cfg['paths']['corpus']} (commit {build['commit'][:10]}"
+             f"{', with uncommitted changes' if build['dirty'] else ''})")
     sample = choose_sample(rows, cfg)
     sample_ids = {row["article_id"] for row, _ in sample}
     write_corpus(sample, [e for e in excluded if e["article_id"] in sample_ids], cfg["paths"]["corpus_sample"])

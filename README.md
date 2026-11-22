@@ -106,7 +106,17 @@ Each command writes a log to `logs/`. Running `acquire` again skips files that a
 
 **Tests:** `uv run pytest` runs all tests. To run one test: `uv run pytest tests/test_rebuild.py::test_page_break_is_noted`.
 
-Later stages (fetch, annotation, review, assembly, statistics) will be added here as they are built.
+**Fetching the published corpus instead (normal start for annotation work):**
+
+| Step | Command | What it writes |
+|---|---|---|
+| Fetch | `uv run ncse fetch` | `data/corpus/full/` (the same files as `prepare` writes, plus `FETCHED.json`) |
+
+`fetch` downloads the release named in `config.yaml` (`release:`), checks its SHA-256 checksum and unpacks it. Running it again does nothing if that version is already in place. It does not overwrite a locally built corpus unless you add `--force`.
+
+**Packaging the corpus for publication:** `uv run ncse package` writes `dist/ncse-arts-corpus-v<version>.zip`, its checksum file and `dist/CORPUS_README.md`. See "Publishing the corpus" below.
+
+Later stages (annotation, review, assembly, statistics) will be added here as they are built.
 
 ## Building the corpus or fetching the published one
 
@@ -182,6 +192,44 @@ Next to the zip, a checksum file (SHA-256) is published, which the fetch stage u
 - Every annotation run records which corpus version it used, so that annotations always point to the exact texts they quote.
 
 A DOI (e.g. by depositing the same zip on Zenodo) is optional.
+
+**Commands.** Packaging is done by script; publishing is done by hand, by the project owner (decision D-019). `<version>` is `release.version` in `config.yaml`, e.g. `1.0`.
+
+1. Build and package from committed code. `package` refuses to run if there are uncommitted changes or if the corpus was built at another commit.
+
+   ```
+   uv run ncse prepare
+   uv run ncse package          # prints the commit the tag must point to
+   cd dist && sha256sum -c ncse-arts-corpus-v<version>.zip.sha256 && cd ..
+   ```
+
+2. Push the code, then tag the commit that built the corpus (the commit printed by `package`, also in `data/corpus/full/BUILD.json`):
+
+   ```
+   git push -u origin <branch>
+   git tag -a corpus-v<version> <commit> -m "Prepared corpus, version <version>"
+   git push origin corpus-v<version>
+   ```
+
+3. Create the release and upload the two files, with the GitHub command-line tool `gh`:
+
+   ```
+   gh release create corpus-v<version> \
+     dist/ncse-arts-corpus-v<version>.zip dist/ncse-arts-corpus-v<version>.zip.sha256 \
+     --title "NCSE arts criticism corpus v<version>" --notes-file dist/CORPUS_README.md
+   ```
+
+   Without `gh`: on the repository's web page choose *Releases → Draft a new release*, select the tag, upload the two files, paste `dist/CORPUS_README.md` as the description and publish.
+
+4. Pin the checksum: put the value from the `.sha256` file into `release.sha256` in `config.yaml` and commit. From then on `fetch` checks downloads against the value in the repository, not only against the file published next to the zip.
+
+5. Test from a fresh clone (the repository must be public):
+
+   ```
+   git clone https://github.com/<owner>/<repo>.git test-clone && cd test-clone
+   git checkout <branch>
+   uv sync && uv run ncse fetch && uv run pytest
+   ```
 
 ## Expected outputs
 

@@ -1,6 +1,7 @@
 # Downloaded and generated data (reproducible from scripts; see README)
 data/
 logs/
+dist/
 # Credentials
 .env
 # Python
