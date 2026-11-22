@@ -139,6 +139,7 @@ export LITELLM_API_KEY=<your key>
 - **Sample mode:** add `--sample` to any of these commands to work on the 24 articles of `corpus_sample/` instead; results go to `data/annotation/sample/` and the reports get `-sample` in their names.
 - **Smaller runs:** `--limit 5` processes at most 5 articles; `--articles LDR-1851-05-17-011 MRP-1822-03-02-001` only the named ones.
 - **Interrupted runs:** run the same command again. Finished articles are skipped, and an answer that was received is never requested again.
+- **Too slow:** an article the service gives up on (the model thinks longer than the service allows) is marked failed and the run goes on; three in a row stop the run (D-031). `--retry-failed` tries them again.
 - **Stopping a run:** press Ctrl-C once to send no new requests and wait for the ones already sent (their answers are saved); press it again to quit at once (D-029).
 - **Failed articles** (still rejected after `annotation.max_retries` retries, or after the model repeated the same answer) are listed in the log and the report. `--retry-failed` gives them a new round of attempts.
 - **Failed items:** passages and statements of an accepted answer that fail a check are kept in the record with their reasons and listed in the report, but do not enter the data (D-027).

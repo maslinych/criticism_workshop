@@ -33,6 +33,11 @@ class LLMError(Exception):
     """An error that should stop the run (after finished work is saved)."""
 
 
+class SlowAnswer(LLMError):
+    """The service gave up after a long wait: this request is too slow. The
+    runner marks the article failed and goes on (D-031)."""
+
+
 @dataclass
 class Reply:
     text: str | None
@@ -40,6 +45,7 @@ class Reply:
     usage: dict
     response_id: str | None
     model: str | None
+    reasoning: str | None = None  # the model's reasoning text, if the service sends it
 
 
 class LLMClient:
@@ -99,10 +105,10 @@ class LLMClient:
                 slow = isinstance(e, TimeoutError) or isinstance(getattr(e, "reason", None), TimeoutError)
             waited = self.clock() - sent_at
             if slow and waited >= self.slow_failure:
-                raise LLMError(f"the service gave up after waiting {waited:.0f} s ({problem}). The model "
-                               "probably needs longer than the service allows for one answer, so asking "
-                               "again would fail the same way. Choose a faster model, or one that does not "
-                               "reason at length, in config.yaml")
+                raise SlowAnswer(f"the service gave up after waiting {waited:.0f} s ({problem}). The model "
+                                 "probably needs longer than the service allows for one answer, so asking "
+                                 "again would fail the same way. Turn reasoning down or choose a faster "
+                                 "model in config.yaml")
             if attempt == self.transport_retries:
                 raise LLMError(f"giving up after {attempt + 1} tries ({problem})")
             wait = self.pause * 2 ** attempt
@@ -110,9 +116,11 @@ class LLMClient:
             if self.stop.wait(wait):
                 raise LLMError("the run was interrupted")
         choice = payload["choices"][0]
-        return Reply(text=choice["message"].get("content"), finish_reason=choice.get("finish_reason"),
+        message = choice["message"]
+        return Reply(text=message.get("content"), finish_reason=choice.get("finish_reason"),
                      usage=payload.get("usage") or {}, response_id=payload.get("id"),
-                     model=payload.get("model"))
+                     model=payload.get("model"),
+                     reasoning=message.get("reasoning_content") or message.get("reasoning"))
 
     def models(self) -> list[str]:
         """The model names the service offers (GET /models)."""

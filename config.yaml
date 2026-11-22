@@ -138,6 +138,8 @@ annotation:
   retry_echo_chars: 2000 # an answer cut off at the length limit is sent back with the retry
                          # only up to this many characters (D-026)
   concurrency: 4         # articles sent at the same time
+  max_slow_in_row: 3     # an article the service gives up on (too slow) is marked failed and the
+                         # run goes on; this many in a row stop the run (D-031)
 
 # Matching quotations against the article text (D-028, src/ncse/quotes.py).
 # A quote matches exactly (only whitespace differs), or normalised (same letters and

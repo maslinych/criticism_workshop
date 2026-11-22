@@ -11,7 +11,7 @@ import pytest
 
 from ncse import annotate, checkreport
 from ncse.config import load_config
-from ncse.llm import LLMError, Reply
+from ncse.llm import LLMError, Reply, SlowAnswer
 
 ARTICLE = "LDR-1851-05-17-011"  # the Don Giovanni notice in corpus_sample/
 QUOTE = "It is familiar as household words, and yet eternally fresh!"
@@ -202,6 +202,39 @@ def test_ctrl_c_stops_the_run_and_keeps_finished_work(cfg):
     assert client.stop.is_set()  # the client's pauses end too
     done = [record(cfg, aid=a) for a in (ARTICLE, "LDR-1850-11-30-005")]
     assert [r["status"] for r in done if r] == ["accepted"]
+
+
+def test_slow_article_fails_and_the_run_goes_on(cfg):
+    client = FakeClient([SlowAnswer("the service gave up after waiting 300 s (HTTP 502)"), good_answer()])
+    summary = analyse(cfg, client, articles=[ARTICLE, "LDR-1850-11-30-005"])
+    slow = record(cfg, aid="LDR-1850-11-30-005")  # first in metadata.csv
+    assert slow["status"] == "failed" and slow["attempts"] == []
+    assert "gave up after waiting" in slow["slow_failures"][0]["error"]
+    assert record(cfg)["status"] == "accepted"
+    assert summary["counts"]["failed (too slow for the service)"] == 1
+    assert "stopped early" not in summary["counts"]
+    # --retry-failed tries it again
+    analyse(cfg, FakeClient([good_answer()]), articles=["LDR-1850-11-30-005"], retry_failed=True)
+    assert record(cfg, aid="LDR-1850-11-30-005")["status"] == "accepted"
+
+
+def test_several_slow_articles_in_a_row_stop_the_run(cfg):
+    cfg["annotation"]["max_slow_in_row"] = 2
+    client = FakeClient([SlowAnswer("gave up after waiting 300 s")] * 2)
+    summary = analyse(cfg, client, articles=None, limit=5)
+    assert len(client.requests) == 2  # the other three articles were not sent
+    assert summary["counts"]["stopped early"] == 1
+
+
+def test_reasoning_text_is_stored(cfg):
+    class Reasoning(FakeClient):
+        def chat(self, model, messages, settings):
+            reply = super().chat(model, messages, settings)
+            reply.reasoning = "The writer praises the opera's freshness."
+            return reply
+
+    analyse(cfg, Reasoning([good_answer()]))
+    assert record(cfg)["attempts"][0]["reasoning"] == "The writer praises the opera's freshness."
 
 
 def test_fatal_error_stops_before_other_articles(cfg):

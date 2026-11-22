@@ -134,3 +134,17 @@ def test_forbidden_model_gets_a_hint(monkeypatch):
     scripted(monkeypatch, [err])
     with pytest.raises(llm.LLMError, match="not be allowed to use this model"):
         client().chat("m", [], {})
+
+
+def test_reasoning_text_is_returned(monkeypatch):
+    with_reasoning = json.loads(json.dumps(OK))
+    with_reasoning["choices"][0]["message"]["reasoning_content"] = "thinking..."
+    scripted(monkeypatch, [with_reasoning, OK])
+    assert client().chat("m", [], {}).reasoning == "thinking..."
+    assert client().chat("m", [], {}).reasoning is None
+
+
+def test_slow_failure_is_its_own_kind_of_error(monkeypatch):
+    scripted(monkeypatch, [http_error(504)])
+    with pytest.raises(llm.SlowAnswer):
+        client(slow_failure=120, clock=Clock(300)).chat("m", [], {})

@@ -214,7 +214,7 @@ Reason: in the smoke test, quotations failed only where the model tidied the tex
 Consequences: `AGENTS.md` (rule 6 and section 10) updated with the owner's approval. Code in `src/ncse/quotes.py`; settings under `quotes` in `config.yaml`; tests in `tests/test_checks.py`.
 
 **D-029 — Stopping a run: Ctrl-C, and answers that take too long**
-Date: 2026-11-22. Status: adopted.
+Date: 2026-11-22. Status: adopted; what happens to a too-slow request is changed by D-031.
 Decision:
 - **Ctrl-C.** The first Ctrl-C sends no new request and ends any pause before a retry. Requests already sent may finish, so that answers being paid for are saved. A second Ctrl-C quits at once; answers still on their way are then lost. Either way, the same command continues the run later.
 - **Too slow for the service.** A gateway error (HTTP 502 or 504) or a time-out that comes after at least `llm.slow_failure` seconds (120) is not retried: the run stops with a message saying that the model needs longer than the service allows for one answer. Quick 502 and 504 answers are still retried as "busy".
@@ -227,6 +227,14 @@ Date: 2026-11-22. Status: adopted (project owner).
 Decision: each step has two more settings in `config.yaml`. `reasoning_effort` (`none`, `minimal`, `low`, `medium`, `high`, or `null` for the model default) is the standard option, which the LiteLLM service translates for models that support it. `extra` passes further options to the service unchanged, for models that are switched another way, e.g. `{chat_template_kwargs: {enable_thinking: false}}` for Qwen3 models served by vLLM. `extra` may not set what the code or the named settings set (model, messages, temperature, max_tokens, response_format, reasoning_effort, stream). Both are sent with every request and recorded with every attempt. The log now counts reasoning tokens, which the service reports as part of the completion tokens.
 Reason: reasoning models (`jlu/qwen3.8-27b`) thought for longer than the service allows for one answer (D-029), and as reviewer used up to 8,000 tokens on thinking. Whether a model honours either setting can only be seen in a run, through the reasoning-token count.
 Consequences: `request_settings` in `annotate.py`; tests in `tests/test_annotate.py`. Both settings are off (`null`, `{}`) by default.
+
+**D-031 — A too-slow article fails alone; the model's reasoning is kept**
+Date: 2026-11-22. Status: adopted (project owner). Changes D-029.
+Decision:
+- When the service gives up on a request after a long wait (D-029), only that article is marked failed, with the reason and the time in the record (`slow_failures`); the run goes on with the other articles. It is not retried in the same run, because the same request would take as long and fail the same way. After `annotation.max_slow_in_row` (3) such failures in a row, the run stops: then the model as a whole is too slow. `--retry-failed` tries the failed articles again, for example after turning reasoning down (D-030).
+- If the service returns the model's reasoning text (`reasoning_content` or `reasoning`), it is stored with the attempt (`reasoning`), so that a reader can see why a statement was made, kept or deleted. It is not checked and does not enter the data.
+Reason: in the smoke tests a 10,000-character article took the analyst 4 min 16 s, close to the service's limit of about 300 s, and some articles are longer; one long article should not stop a pilot or a full run. The reviewer accepted all 27 statements of the second analyst smoke test without a single action; without its reasoning there was no way to see whether it had considered the borderline cases.
+Consequences: `SlowAnswer` in `llm.py`; `StepRunner.too_slow` in `annotate.py`; tests in `tests/test_llm.py` and `tests/test_annotate.py`.
 
 ## Open questions for the project owner
 

@@ -33,7 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import checks
-from .llm import LLMClient, LLMError
+from .llm import LLMClient, LLMError, SlowAnswer
 from .prompts import load_prompt
 from .quotes import Tolerance
 from .runlog import RunLog
@@ -161,6 +161,8 @@ class StepRunner:
         self.run_id = f"{step}-{dt.datetime.now():%Y%m%d-%H%M%S}"
         self.lock = threading.Lock()
         self.stop = threading.Event()
+        self.slow_in_row = 0  # slow failures in a row (D-031)
+        self.max_slow_in_row = ann.get("max_slow_in_row", 3)
         self.client.stop = self.stop  # the client's pauses before a retry end when the run stops
         self.fatal: str | None = None
 
@@ -285,14 +287,21 @@ class StepRunner:
                        "messages_after_system": messages[1:], "requested_at": now()}
             try:
                 reply = self.client.chat(self.model, messages, self.settings)
+            except SlowAnswer as e:
+                self.too_slow(record, attempt["requested_at"], str(e))
+                return
             except LLMError as e:
                 self.fatal = self.fatal or str(e)  # keep the first reason (e.g. Ctrl-C)
                 self.stop.set()
                 save_record(self.out, record)
                 self.info(f"{aid}: stopping the run: {e}")
                 return
+            with self.lock:
+                self.slow_in_row = 0
             attempt.update(answered_at=now(), raw_response=reply.text, finish_reason=reply.finish_reason,
                            usage=reply.usage, response_id=reply.response_id, model_reported=reply.model)
+            if reply.reasoning:
+                attempt["reasoning"] = reply.reasoning
             record["attempts"].append(attempt)
             save_record(self.out, record)  # the paid answer is safe before anything else happens
             self.count("requests")
@@ -311,6 +320,26 @@ class StepRunner:
         save_record(self.out, record)
         self.count("failed")
         self.info(f"{aid}: FAILED after {self.max_attempts} attempts")
+
+    def too_slow(self, record: dict, requested_at: str, message: str) -> None:
+        """The service gave up on this article after a long wait (D-031). It is
+        marked failed at once, since asking again would take as long and fail
+        the same way; `--retry-failed` tries it again later. Only after
+        `max_slow_in_row` such failures in a row does the run stop."""
+        aid = record["article_id"]
+        record.setdefault("slow_failures", []).append({"requested_at": requested_at, "failed_at": now(),
+                                                       "model": self.model, "error": message})
+        record.update(status="failed", errors=[message])
+        save_record(self.out, record)
+        self.count("failed")
+        self.count("failed (too slow for the service)")
+        self.info(f"{aid}: FAILED: {message}")
+        with self.lock:
+            self.slow_in_row += 1
+            if self.slow_in_row >= self.max_slow_in_row and not self.stop.is_set():
+                self.fatal = self.fatal or (f"{self.slow_in_row} articles in a row were too slow for the service; "
+                                            "turn reasoning down or choose a faster model in config.yaml")
+                self.stop.set()
 
     def interrupted(self, pool: ThreadPoolExecutor) -> None:
         """Ctrl-C: send no new request, stop any pause before a retry, and let
@@ -418,7 +447,7 @@ class StepRunner:
 
 def error_kind(message: str) -> str:
     """A short category of a check error, for the counts in the log and report."""
-    kinds = [("not a verbatim passage", "quote not found"), ("does not match any passage", "quote not found"),
+    kinds = [("gave up after waiting", "too slow for the service"), ("not a verbatim passage", "quote not found"), ("does not match any passage", "quote not found"),
              ("same answer as in the previous attempt", "answer repeated"),
              ("does not occur inside its quote", "expression not in quote"),
              ("needs an assumption", "assumption missing"),
