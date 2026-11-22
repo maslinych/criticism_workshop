@@ -3,6 +3,8 @@
 Output (for the full corpus in data/corpus/full/, and for the small sample in corpus_sample/):
   texts/<article_id>.txt   the article text: box texts joined by a blank line, OCR unchanged
   metadata.csv             one row per article (columns described in METADATA_COLUMNS)
+  excluded_boxes.csv       boxes of text invented by the OCR model that were left out
+                           (D-017; columns described in EXCLUDED_COLUMNS)
 and a summary report in reports/02-corpus-summary.md.
 
 Running the stage again rebuilds the corpus from scratch; the result is identical
@@ -16,6 +18,8 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
+import polars as pl
+
 from .rebuild import rebuild_issue
 from .runlog import RunLog
 from .source import load_boxes
@@ -27,15 +31,28 @@ METADATA_COLUMNS = {
     "issue_id": "NCSE issue identifier",
     "issue_date": "issue date (YYYY-MM-DD) as given in the NCSE issue identifier",
     "pages": "page number(s) within the issue, separated by ';'",
-    "heading": "text of the title box(es) heading the article, separated by ' | '; empty if none",
+    "heading": "text of the title box(es) heading the article, separated by ' | '; empty if none "
+               "(a heading at the start of a text box stays in the text; see rebuild_notes)",
     "n_words": "number of words in the text file (split at whitespace)",
     "n_chars": "number of characters in the text file",
     "n_entries": "number of NCSE boxes the article was built from",
     "selected_share": "share of the article's characters in boxes that meet the selection rule",
+    "whole_unit": "yes if the whole text from its heading to the next heading was taken; no if only the selected part (D-016)",
     "ncse_text_types": "NCSE text type label of each box, in order, separated by ';'",
     "ncse_topics": "NCSE topic labels of each box, in order, separated by ';' (several topics per box joined by '|')",
     "ncse_entry_ids": "NCSE box identifiers (bbox_uid) the article was built from, in reading order, separated by ';'",
     "rebuild_notes": "notes on how the article was rebuilt, separated by ' / '",
+}
+
+EXCLUDED_COLUMNS = {
+    "ncse_entry_id": "NCSE box identifier (bbox_uid) of the box left out",
+    "issue_id": "NCSE issue identifier",
+    "page": "page number within the issue",
+    "reason": "why the box counts as text invented by the OCR model (D-017)",
+    "n_chars": "number of characters in the box",
+    "selected": "yes if the box carries the labels of the selection rule (D-002)",
+    "article_id": "the article the box lies inside, if any; empty if it would have formed or started an article on its own",
+    "text_start": "the first 150 characters of the box, with spaces normalised (for reading only)",
 }
 
 
@@ -44,10 +61,15 @@ def article_rows(cfg: dict, periodical: dict, log: RunLog) -> list[tuple[dict, s
     log.info(f"{periodical['name']}: {boxes.height:,} boxes in {boxes['issue_id'].n_unique()} issues")
     log.count("boxes read", boxes.height)
     log.count("boxes meeting selection rule", int(boxes["selected"].sum()))
-    rb = cfg["rebuild"]
-    rows = []
+    inv = boxes.filter(pl.col("invented").is_not_null())
+    log.info(f"  {inv.height:,} text/title boxes count as invented by the OCR model ({inv['n_chars'].sum():,} characters)")
+    log.count("boxes of invented text", inv.height)
+    log.count("boxes of invented text meeting selection rule", int(inv["selected"].sum()))
+    rows, excluded = [], []
     for (issue_id,), issue in boxes.group_by(["issue_id"], maintain_order=True):
-        articles = rebuild_issue(issue.to_dicts(), rb["max_gap"], set(rb["exclude_classes"]))
+        issue_boxes = issue.to_dicts()
+        articles = rebuild_issue(issue_boxes, cfg["rebuild"], cfg["selection"]["topic"])
+        listed = set()
         for n, art in enumerate(articles, start=1):
             text = art.text
             article_id = f"{periodical['code']}-{art.boxes[0]['issue_date']}-{n:03d}"
@@ -64,6 +86,7 @@ def article_rows(cfg: dict, periodical: dict, log: RunLog) -> list[tuple[dict, s
                 "n_chars": len(text),
                 "n_entries": len(art.boxes),
                 "selected_share": round(selected_chars / max(1, sum(b["n_chars"] for b in art.boxes)), 3),
+                "whole_unit": "yes" if art.whole else "no",
                 "ncse_text_types": ";".join(b["text_type"] for b in art.boxes),
                 "ncse_topics": ";".join("|".join(b["topics"]) for b in art.boxes),
                 "ncse_entry_ids": ";".join(b["bbox_uid"] for b in art.boxes),
@@ -71,29 +94,58 @@ def article_rows(cfg: dict, periodical: dict, log: RunLog) -> list[tuple[dict, s
                 "_text_boxes": len(art.boxes) - art.heading_count,  # for the summary only, not written
             }
             rows.append((row, text))
+            log.count("articles taken as whole units" if art.whole else "articles taken as selected parts of units")
             for note in art.notes:
                 # count the kind of note, without the numbers and box identifiers
                 log.count("note: " + re.sub(r"\d+ ", "", note.split(":")[0]))
-    log.info(f"  {len(rows):,} articles built")
+            for b in art.left_out:
+                if b["invented"]:
+                    excluded.append(excluded_row(b, article_id))
+                    listed.add(b["bbox_uid"])
+        # Selected boxes of invented text that lie in no article are listed too.
+        for b in issue_boxes:
+            if b["invented"] and b["selected"] and b["bbox_uid"] not in listed:
+                excluded.append(excluded_row(b, ""))
+    log.info(f"  {len(rows):,} articles built; {len(excluded):,} boxes of invented text listed as excluded")
     log.count("articles built", len(rows))
-    return rows
+    log.count("excluded boxes listed", len(excluded))
+    return rows, excluded
 
 
-def write_corpus(rows: list[tuple[dict, str]], folder: Path) -> None:
-    """Write texts/ and metadata.csv into folder, replacing old versions safely."""
+def excluded_row(box: dict, article_id: str) -> dict:
+    return {
+        "ncse_entry_id": box["bbox_uid"],
+        "issue_id": box["issue_id"],
+        "page": box["page_number"],
+        "reason": box["invented"],
+        "n_chars": box["n_chars"],
+        "selected": "yes" if box["selected"] else "no",
+        "article_id": article_id,
+        "text_start": " ".join(box["content"].split())[:150],
+    }
+
+
+def write_csv(path: Path, columns: dict, rows) -> None:
+    tmp = path.with_suffix(".csv.tmp")
+    with open(tmp, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(columns), extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    tmp.replace(path)
+
+
+def write_corpus(rows: list[tuple[dict, str]], excluded: list[dict], folder: Path) -> None:
+    """Write texts/, metadata.csv and excluded_boxes.csv into folder, replacing old versions safely."""
     folder.mkdir(parents=True, exist_ok=True)
     tmp = folder / "texts.tmp"
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir()
     for row, text in rows:
         (tmp / row["file_name"]).write_text(text, encoding="utf-8", newline="")
-    with open(folder / "metadata.csv.tmp", "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(METADATA_COLUMNS), extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(row for row, _ in rows)
     shutil.rmtree(folder / "texts", ignore_errors=True)
     tmp.rename(folder / "texts")
-    (folder / "metadata.csv.tmp").replace(folder / "metadata.csv")
+    write_csv(folder / "metadata.csv", METADATA_COLUMNS, (row for row, _ in rows))
+    write_csv(folder / "excluded_boxes.csv", EXCLUDED_COLUMNS, excluded)
 
 
 def choose_sample(rows: list[tuple[dict, str]], cfg: dict) -> list[tuple[dict, str]]:
@@ -106,7 +158,7 @@ def choose_sample(rows: list[tuple[dict, str]], cfg: dict) -> list[tuple[dict, s
     return sorted(chosen, key=lambda r: r[0]["article_id"])
 
 
-def summary_report(rows: list[tuple[dict, str]], counts: Counter) -> str:
+def summary_report(rows: list[tuple[dict, str]], excluded: list[dict], counts: Counter) -> str:
     lines = [
         "# Prepared corpus: summary",
         "",
@@ -114,8 +166,9 @@ def summary_report(rows: list[tuple[dict, str]], counts: Counter) -> str:
         "",
         "## Articles per periodical",
         "",
-        "| Periodical | Articles | Words | Median words | With heading | Crossing a page break | Only one text box |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Periodical | Articles | Words | Median words | Whole units | With title box | Starting at a heading in the text "
+        "| Starting without a heading | Crossing a page break | Only one text box |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     by_per: dict[str, list[dict]] = {}
     for row, _ in rows:
@@ -124,9 +177,30 @@ def summary_report(rows: list[tuple[dict, str]], counts: Counter) -> str:
         words = sorted(r["n_words"] for r in rs)
         lines.append(
             f"| {per} | {len(rs):,} | {sum(words):,} | {words[len(words) // 2]:,} "
-            f"| {sum(bool(r['heading']) for r in rs):,} | {sum('crosses page break' in r['rebuild_notes'] for r in rs):,} "
+            f"| {sum(r['whole_unit'] == 'yes' for r in rs):,} | {sum(bool(r['heading']) for r in rs):,} "
+            f"| {sum(' / starts at a ' in r['rebuild_notes'] for r in rs):,} "
+            f"| {sum(' / no heading' in r['rebuild_notes'] for r in rs):,} "
+            f"| {sum('crosses page break' in r['rebuild_notes'] for r in rs):,} "
             f"| {sum(r['_text_boxes'] == 1 for r in rs):,} |"
         )
+    lines += [
+        "",
+        "## Boxes of invented text left out (D-017)",
+        "",
+        "Listed in `excluded_boxes.csv`: boxes inside an article, and selected boxes that would have formed an article.",
+        "",
+        "| Periodical | Boxes | Characters | Inside an article | Selected |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for periodical in sorted(by_per):
+        code = by_per[periodical][0]["article_id"][:3]
+        ex = [e for e in excluded if e["issue_id"].startswith(code)]
+        lines.append(
+            f"| {periodical} | {len(ex):,} | {sum(e['n_chars'] for e in ex):,} "
+            f"| {sum(bool(e['article_id']) for e in ex):,} | {sum(e['selected'] == 'yes' for e in ex):,} |"
+        )
+    reasons = Counter(e["reason"].split(":")[0] for e in excluded)
+    lines += ["", "By test: " + "; ".join(f"{k}: {v:,}" for k, v in sorted(reasons.items())) + "."]
     lines += ["", "## Articles per decade", "", "| Periodical | Decade | Articles | Words |", "|---|---|---:|---:|"]
     dec = Counter()
     decw = Counter()
@@ -149,18 +223,21 @@ def summary_report(rows: list[tuple[dict, str]], counts: Counter) -> str:
 
 def run(cfg: dict) -> None:
     log = RunLog("prepare", cfg["paths"]["logs"])
-    rows = []
+    rows, excluded = [], []
     for periodical in cfg["periodicals"]:
-        rows += article_rows(cfg, periodical, log)
+        r, e = article_rows(cfg, periodical, log)
+        rows += r
+        excluded += e
 
-    write_corpus(rows, cfg["paths"]["corpus"])
+    write_corpus(rows, excluded, cfg["paths"]["corpus"])
     log.info(f"full corpus written to {cfg['paths']['corpus']}")
     sample = choose_sample(rows, cfg)
-    write_corpus(sample, cfg["paths"]["corpus_sample"])
+    sample_ids = {row["article_id"] for row, _ in sample}
+    write_corpus(sample, [e for e in excluded if e["article_id"] in sample_ids], cfg["paths"]["corpus_sample"])
     log.info(f"sample corpus ({len(sample)} articles) written to {cfg['paths']['corpus_sample']}")
     log.count("sample articles", len(sample))
 
     report = cfg["paths"]["reports"] / "02-corpus-summary.md"
-    report.write_text(summary_report(rows, log.counts), encoding="utf-8")
+    report.write_text(summary_report(rows, excluded, log.counts), encoding="utf-8")
     log.info(f"summary written to {report}")
     log.close()

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from ncse.config import load_config
-from ncse.prepare import METADATA_COLUMNS
+from ncse.prepare import EXCLUDED_COLUMNS, METADATA_COLUMNS
 from ncse.rebuild import SEPARATOR
 
 CFG = load_config()
@@ -80,6 +80,26 @@ def test_entry_lists_consistent(corpus):
         assert all(e.startswith(r["issue_id"] + "_page_") for e in entries)
         assert not seen & set(entries), f"{r['article_id']} reuses an NCSE entry"
         seen |= set(entries)
+
+
+def test_excluded_boxes_are_not_in_any_article(corpus):
+    folder, rows = corpus
+    with open(folder / "excluded_boxes.csv", encoding="utf-8", newline="") as f:
+        excluded = list(csv.DictReader(f))
+    if excluded:
+        assert list(excluded[0]) == list(EXCLUDED_COLUMNS)
+    used = {e for r in rows for e in r["ncse_entry_ids"].split(";")}
+    ids = {r["article_id"] for r in rows}
+    for e in excluded:
+        assert e["ncse_entry_id"] not in used, e["ncse_entry_id"]
+        assert e["reason"], e["ncse_entry_id"]
+        assert e["article_id"] == "" or e["article_id"] in ids, e["article_id"]
+    assert len({e["ncse_entry_id"] for e in excluded}) == len(excluded)
+
+
+def test_whole_unit_values(corpus):
+    _, rows = corpus
+    assert {r["whole_unit"] for r in rows} <= {"yes", "no"}
 
 
 RAW = CFG["paths"]["raw"] / "NCSE_v2"

@@ -54,13 +54,26 @@ selection:
   text_type: article
   topic: arts_culture_entertainment_media
 
-# Article rebuild (D-012, provisional): how many boxes without the selection labels
-# may sit between two selected boxes and still be counted as part of one article.
+# Article rebuild (D-016, provisional; replaces D-012). See src/ncse/rebuild.py.
 rebuild:
+  # A unit (text from one heading to the next) is taken whole if it spans at most
+  # max_pages pages and either opens with arts text or has at least whole_share of
+  # its characters in boxes meeting the selection rule.
+  max_pages: 3
+  whole_share: 0.5
+  # Otherwise only its selected part is taken: how many boxes without the selection
+  # labels may sit between two selected boxes and still count as one article.
   max_gap: 2
   # NCSE box classes that are left out of the corpus text (D-013).
   # figure = the OCR model's description of a picture; table = a table re-typed by the model.
   exclude_classes: [figure, table]
+
+# Text invented by the OCR model (D-017): such boxes are left out of the corpus and
+# listed in excluded_boxes.csv. See src/ncse/invented.py.
+invented:
+  token_limit: 2000    # the OCR model stopped after this many output tokens per part of a box
+  repeat_ngram: 8      # length (in words) of the sequences checked for repetition
+  repeat_share: 0.3    # a box is a loop if at least this share of its sequences are repeats
 
 # Corpus sample for sample mode and tests (corpus_sample/).
 sample:

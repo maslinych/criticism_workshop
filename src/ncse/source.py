@@ -13,6 +13,8 @@ from pathlib import Path
 
 import polars as pl
 
+from .invented import invented_reason
+
 
 def _mapping(raw: Path, name: str) -> dict[int, str]:
     data = json.loads((raw / "class_mappings" / name).read_text())
@@ -24,7 +26,9 @@ def load_boxes(cfg: dict, periodical: dict, all_series: bool = False) -> pl.Data
 
     Columns added to the NCSE ones:
       bbox_uid, series, issue_date, n_chars,
-      text_type (name), topics (list of names), selected (bool: meets D-002).
+      text_type (name), topics (list of names), selected (bool: meets D-002),
+      invented (why the box counts as text invented by the OCR model, D-017; else null;
+                only text and title boxes are tested).
     Only the configured issue series are kept unless all_series=True.
     """
     raw: Path = cfg["paths"]["raw"]
@@ -69,4 +73,12 @@ def load_boxes(cfg: dict, periodical: dict, all_series: bool = False) -> pl.Data
     )
     if not all_series:
         boxes = boxes.filter(pl.col("series").is_in(periodical["series"]))
+    settings = cfg["invented"]
+    reasons = [
+        invented_reason(content, tokens, parts, settings) if cls in ("text", "title") else None
+        for cls, content, tokens, parts in zip(
+            boxes["class"], boxes["content"], boxes["completion_tokens"], boxes["segment_count"]
+        )
+    ]
+    boxes = boxes.with_columns(invented=pl.Series(reasons, dtype=pl.String))
     return boxes.sort("issue_id", "page_number", "reading_order")

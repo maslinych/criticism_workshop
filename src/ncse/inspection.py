@@ -9,7 +9,7 @@ import random
 
 import polars as pl
 
-from .rebuild import rebuild_issue, segments
+from .rebuild import heading_kind, rebuild_issue, units
 from .runlog import RunLog
 from .source import load_boxes
 
@@ -114,24 +114,46 @@ def run(cfg: dict) -> None:
         iso = b2.filter(pl.col("selected") & ~pl.col("prev_sel") & ~pl.col("next_sel")).height
         lines += [f"Selected boxes with no selected neighbour on either side (isolated): {iso:,} ({iso / max(1, sel.height):.1%}).", ""]
 
-        # Title segments vs rebuilt articles
-        n_seg, seg_pages, arts = 0, [], []
+        # Text invented by the OCR model (D-017)
+        inv = b.filter(pl.col("invented").is_not_null())
+        lines += [
+            "### Boxes of text invented by the OCR model (D-017)",
+            "",
+            f"Text and title boxes that count as invented: {inv.height:,} of {b.filter(pl.col('class').is_in(['text', 'title'])).height:,} "
+            f"({inv['n_chars'].sum():,} of {b['n_chars'].sum():,} characters); meeting the selection rule: {int(inv['selected'].sum()):,}.",
+            "",
+        ]
+        lines += table(
+            inv.with_columns(test=pl.col("invented").str.extract(r"^([^:]+)"))
+            .group_by("test")
+            .agg(boxes=pl.len(), selected=pl.col("selected").sum(), characters=pl.col("n_chars").sum())
+            .sort("test")
+        )
+        lines += ["Random sample of invented boxes meeting the selection rule:", "", "| box | reason | text (first 300 characters) |", "|---|---|---|"]
+        for r in inv.filter("selected").sample(min(8, int(inv["selected"].sum())), seed=cfg["sample"]["seed"]).iter_rows(named=True):
+            lines.append(f"| {r['bbox_uid']} | {r['invented']} | {snippet(r['content'])} |")
+        lines += [""]
+
+        # Units (heading to heading) and rebuilt articles (D-016)
+        n_units, unit_pages, kinds, arts = 0, [], {}, []
         for _, issue in b.group_by(["issue_id"], maintain_order=True):
             rows = issue.to_dicts()
-            for titles, items in segments(rows):
-                n_seg += 1
-                seg_pages.append(len({x["page_number"] for x in titles + items}))
-            arts += rebuild_issue(rows, rb["max_gap"], set(rb["exclude_classes"]))
-        seg_pages.sort()
+            for u in units(rows):
+                n_units += 1
+                unit_pages.append(len({x["page_number"] for x in u}))
+                k = heading_kind(u[0]) or "(no heading: start of issue)"
+                kinds[k] = kinds.get(k, 0) + 1
+            arts += rebuild_issue(rows, rb, cfg["selection"]["topic"])
+        unit_pages.sort()
         lines += [
-            "### Title segments and rebuilt articles",
+            "### Units and rebuilt articles",
             "",
-            f"Title segments (a title box and everything up to the next title): {n_seg:,}; "
-            f"pages per segment: median {seg_pages[len(seg_pages) // 2]}, 90th percentile {seg_pages[int(len(seg_pages) * 0.9)]}, maximum {seg_pages[-1]}.",
+            f"Units (from one heading to the next): {n_units:,}; "
+            f"pages per unit: median {unit_pages[len(unit_pages) // 2]}, 90th percentile {unit_pages[int(len(unit_pages) * 0.9)]}, maximum {unit_pages[-1]}. "
+            "Units by the kind of heading they start with: " + "; ".join(f"{k}: {v:,}" for k, v in sorted(kinds.items())) + ".",
             "",
-            f"Articles rebuilt with the D-012 rule (max_gap = {rb['max_gap']}): {len(arts):,}; "
-            f"with heading: {sum(a.heading_count > 0 for a in arts):,}; only one text box: {sum(len(a.boxes) - a.heading_count == 1 for a in arts):,}; "
-            f"with bridged boxes: {sum(any(n.startswith('bridged') for n in a.notes) for a in arts):,}.",
+            f"Articles rebuilt with the D-016 rule: {len(arts):,}; whole units: {sum(a.whole for a in arts):,}; "
+            f"with a title box: {sum(a.heading_count > 0 for a in arts):,}; only one text box: {sum(len(a.boxes) - a.heading_count == 1 for a in arts):,}.",
             "",
         ]
 
