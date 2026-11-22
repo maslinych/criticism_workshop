@@ -1,0 +1,57 @@
+{
+  "NCSE_v2.zip": {
+    "url": "https://ndownloader.figshare.com/files/52260821",
+    "doi": "10.5522/04/28381610",
+    "figshare_version": 1,
+    "downloaded": "2026-11-22T16:01:21",
+    "size": 817784124,
+    "md5": "7438b975c76783e777b7704ea7ddcf8c",
+    "sha256": "393257e923902e5fd22599ff3cc3d14fe3e0b7c6f6bcd194a40cac43a33ad22f",
+    "contents": [
+      "post_processed/ncsev2_readme.txt",
+      "post_processed/Publishers_Circular_issue_PDF_files.parquet",
+      "post_processed/English_Womans_Journal_issue_PDF_files.parquet",
+      "post_processed/Tomahawk_issue_PDF_files.parquet",
+      "post_processed/Monthly_Repository_issue_PDF_files.parquet",
+      "post_processed/Northern_Star_issue_PDF_files.parquet",
+      "post_processed/Leader_issue_PDF_files.parquet"
+    ]
+  },
+  "classification_data.zip": {
+    "url": "https://ndownloader.figshare.com/files/52260923",
+    "doi": "10.5522/04/28381610",
+    "figshare_version": 1,
+    "downloaded": "2026-11-22T16:04:12",
+    "size": 153326947,
+    "md5": "b6452f60b4c27a5ca96a892a979ab5a3",
+    "sha256": "c92393e70796da9f65613cec043ec4eaeb113189aa4856a93d4113451864356b",
+    "contents": [
+      "IPTC_type_classified/classified_Publishers_Circular_issue_PDF_files.parquet",
+      "IPTC_type_classified/classified_Northern_Star_issue_PDF_files.parquet",
+      "IPTC_type_classified/classified_English_Womans_Journal_issue_PDF_files.parquet",
+      "IPTC_type_classified/classified_Monthly_Repository_issue_PDF_files.parquet",
+      "IPTC_type_classified/classified_Tomahawk_issue_PDF_files.parquet",
+      "IPTC_type_classified/classified_Leader_issue_PDF_files.parquet",
+      "text_type_classified/classified_Publishers_Circular_issue_PDF_files.parquet",
+      "text_type_classified/classified_Northern_Star_issue_PDF_files.parquet",
+      "text_type_classified/classified_English_Womans_Journal_issue_PDF_files.parquet",
+      "text_type_classified/classified_Monthly_Repository_issue_PDF_files.parquet",
+      "text_type_classified/classified_Tomahawk_issue_PDF_files.parquet",
+      "text_type_classified/classified_Leader_issue_PDF_files.parquet",
+      "mapping_readme.txt"
+    ]
+  },
+  "class_mappings.zip": {
+    "url": "https://ndownloader.figshare.com/files/52260941",
+    "doi": "10.5522/04/28381610",
+    "figshare_version": 1,
+    "downloaded": "2026-11-22T16:04:13",
+    "size": 750,
+    "md5": "53e432fdd652a37c65641cbc2a04730e",
+    "sha256": "9e0a83c9ea0af06583e3d7091982cd3cb186c19e69ecc1a85c05023bc00aa7e6",
+    "contents": [
+      "IPTC_class_mapping.json",
+      "text_type_class_mapping.json"
+    ]
+  }
+}
