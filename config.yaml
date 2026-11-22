@@ -31,21 +31,39 @@ paths:
   reports: reports           # generated reports (in git)
   logs: logs                 # run logs (not in git)
 
-# The two periodicals. `code` is used in article identifiers.
-# `match` is a piece of text that identifies the periodical's files in the download.
+# The two periodicals.
+#   file:   the name the NCSE files use for this periodical
+#   series: which issue series to use (the part of the NCSE issue_id before the date).
+#           Monthly Repository: MRP = regular issues (SMRP supplements, FMRP front matter
+#           and EMRP are left out, D-011). The Leader: LDR = town edition (the CLD country
+#           edition repeats most of the same text and is left out, D-010).
+#   code:   prefix of our article identifiers
 periodicals:
   - name: The Monthly Repository
+    file: Monthly_Repository
+    series: [MRP]
     code: MRP
-    match: TBD   # filled in after inspection
   - name: The Leader
+    file: Leader
+    series: [LDR]
     code: LDR
-    match: TBD
 
-# Selection rule D-002 (provisional).
+# Selection rule D-002 (provisional): NCSE text type and topic labels, as named in
+# the NCSE class mapping files.
 selection:
   text_type: article
-  topic: "Arts, culture, entertainment and media"
+  topic: arts_culture_entertainment_media
 
+# Article rebuild (D-012, provisional): how many boxes without the selection labels
+# may sit between two selected boxes and still be counted as part of one article.
+rebuild:
+  max_gap: 2
+  # NCSE box classes that are left out of the corpus text (D-013).
+  # figure = the OCR model's description of a picture; table = a table re-typed by the model.
+  exclude_classes: [figure, table]
+
+# Corpus sample for sample mode and tests (corpus_sample/).
 sample:
-  articles_per_periodical: 5
+  articles_per_periodical: 12
+  min_chars: 1500   # skip very short fragments so the sample is useful to read
   seed: 1850
