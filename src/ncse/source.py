@@ -16,6 +16,16 @@ import polars as pl
 from .invented import invented_reason
 
 
+def read_table(path: Path) -> pl.DataFrame:
+    """Read an NCSE table: the parquet file of the download, or the CSV file of the raw sample."""
+    if path.with_suffix(".parquet").exists():
+        return pl.read_parquet(path.with_suffix(".parquet"))
+    csv_path = path.with_suffix(".csv")
+    header = pl.read_csv(csv_path, n_rows=0).columns
+    strings = {c: pl.String for c in ("issue_id", "class", "content", "box_page_id", "page_id", "bbox_uid") if c in header}
+    return pl.read_csv(csv_path, infer_schema_length=None, schema_overrides=strings)
+
+
 def _mapping(raw: Path, name: str) -> dict[int, str]:
     data = json.loads((raw / "class_mappings" / name).read_text())
     return {int(k): v for k, v in data.items()}
@@ -33,13 +43,9 @@ def load_boxes(cfg: dict, periodical: dict, all_series: bool = False) -> pl.Data
     """
     raw: Path = cfg["paths"]["raw"]
     name = periodical["file"]
-    boxes = pl.read_parquet(raw / "NCSE_v2" / "post_processed" / f"{name}_issue_PDF_files.parquet")
-    types = pl.read_parquet(
-        raw / "classification_data" / "text_type_classified" / f"classified_{name}_issue_PDF_files.parquet"
-    )
-    topics = pl.read_parquet(
-        raw / "classification_data" / "IPTC_type_classified" / f"classified_{name}_issue_PDF_files.parquet"
-    )
+    boxes = read_table(raw / "NCSE_v2" / "post_processed" / f"{name}_issue_PDF_files")
+    types = read_table(raw / "classification_data" / "text_type_classified" / f"classified_{name}_issue_PDF_files")
+    topics = read_table(raw / "classification_data" / "IPTC_type_classified" / f"classified_{name}_issue_PDF_files")
 
     type_names = _mapping(raw, "text_type_class_mapping.json")
     topic_names = _mapping(raw, "IPTC_class_mapping.json")

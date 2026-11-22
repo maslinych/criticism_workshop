@@ -132,6 +132,12 @@ Decision: the `main` branch carries no files for a particular coding agent. All 
 Reason: anyone who clones the repository can use any coding agent, or none.
 Consequences: `CLAUDE.md` was removed from `main` and its general content moved to `AGENTS.md`.
 
+**D-021 — The raw NCSE sample**
+Date: 2026-11-22. Status: adopted.
+Decision: `uv run ncse sample-raw` writes `raw_sample/`, committed to git. It holds the original NCSE rows (boxes plus their two label rows) for every box on the pages of 12 articles, 6 per periodical. Per periodical, 3 articles are taken as whole units, 2 as selected parts and 1 has a box of invented text left out. They are drawn at random (seed in `config.yaml`, `raw_sample`) among articles whose unit spans at most 2 pages. All boxes on the pages of each article's unit are copied, so the article comes out of the sample exactly as out of the full data. The files keep the folder layout of the download but are plain CSV instead of parquet. `source.py` reads either format, so the real code runs on the sample when `paths.raw` points to it. `articles.csv` records, for each chosen article, its NCSE boxes, notes and a checksum of its text. The script checks the sample against this file before writing it, and so does `tests/test_raw_sample.py`.
+Reason: D-008 asks for a raw sample that lets stages 2–3 be tested and understood without the 1 GB download. CSV can be read without special tools and keeps the OCR text exactly (tested on line breaks, quotation marks and empty texts). Copying whole pages, not just the article's boxes, keeps the context the rebuild rule depends on: headings, neighbouring boxes and unit length.
+Consequences: 172 boxes on 18 pages, about 320 KB. Articles other than the chosen 12 that appear on the same pages may be cut off at the edge of the copied pages.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.

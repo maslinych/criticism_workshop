@@ -28,6 +28,7 @@ paths:
   interim: data/interim      # intermediate files from inspection (not in git)
   corpus: data/corpus/full   # the full prepared corpus (not in git; rebuilt by script)
   corpus_sample: corpus_sample  # small fixed sample corpus (in git; for sample mode and tests)
+  raw_sample: raw_sample     # small extract of the original NCSE rows (in git; test data for stages 2–3)
   reports: reports           # generated reports (in git)
   logs: logs                 # run logs (not in git)
   dist: dist                 # corpus release package made by `ncse package` (not in git)
@@ -90,4 +91,13 @@ invented:
 sample:
   articles_per_periodical: 12
   min_chars: 1500   # skip very short fragments so the sample is useful to read
+  seed: 1850
+
+# Raw NCSE sample (raw_sample/, D-021): original NCSE rows for a few complete articles,
+# as test data for stages 2–3. Numbers are articles per periodical.
+raw_sample:
+  whole: 3        # taken as whole units
+  part: 2         # taken as selected parts of a longer unit
+  invented: 1     # with a box of invented text left out
+  max_pages: 2    # only articles whose unit spans at most this many pages
   seed: 1850

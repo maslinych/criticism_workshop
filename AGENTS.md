@@ -105,12 +105,13 @@ Never fix an LLM output by hand. Never drop a failed item silently.
 
 A quick map of the project for coding agents and new contributors. The rules above take precedence.
 
-**Current state.** Stages 1–4 are done: the corpus is built and published as release `corpus-v1.0`, and `uv run ncse fetch` downloads it. The annotation stages are not built yet; `STATUS.md` lists the next steps.
+**Current state.** Stages 1–4 are done: the corpus is built and published as release `corpus-v1.0`, `uv run ncse fetch` downloads it, and `raw_sample/` lets stages 2–3 run and be tested without the download. The annotation stages are not built yet; `STATUS.md` lists the next steps.
 
 **Commands**
 
 - Setup: `uv sync` (uv installs Python and the exact package versions in `uv.lock`; D-009).
 - Get the corpus: `uv run ncse fetch` (published release), or build it from NCSE with `uv run ncse acquire`, `uv run ncse inspect`, `uv run ncse prepare`.
+- Refresh the raw NCSE sample (`raw_sample/`, test data for stages 2–3): `uv run ncse sample-raw` (needs the download).
 - Package a new corpus version: `uv run ncse package` (zip in `dist/`). Publishing (tag, push, GitHub release) is done by the project owner by hand; an agent never publishes (D-019).
 - Tests: `uv run pytest`; one test: `uv run pytest tests/test_rebuild.py::test_page_break_is_noted`. No linter is configured.
 
@@ -119,7 +120,7 @@ A quick map of the project for coding agents and new contributors. The rules abo
 - `config.yaml` (project root): all paths and settings. `cli.py`: the `ncse` command.
 - `source.py` loads NCSE boxes, joins their labels and marks text invented by the OCR model (`invented.py`, D-017).
 - `rebuild.py` (pure functions, D-016) cuts issues into units at headings and turns them into articles.
-- `inspection.py` and `prepare.py` are stages 2 and 3; `release.py` (package) and `fetch.py` handle the corpus release; `runlog.py` writes run logs with counts to `logs/`.
+- `inspection.py` and `prepare.py` are stages 2 and 3; `rawsample.py` draws the raw NCSE sample; `release.py` (package) and `fetch.py` handle the corpus release; `runlog.py` writes run logs with counts to `logs/`.
 
 **NCSE facts the code relies on**
 
