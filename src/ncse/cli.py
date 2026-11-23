@@ -26,6 +26,18 @@ def main() -> None:
     check = sub.add_parser("check", help="stages 5 and 7: re-check stored answers and write a report (no LLM requests)")
     check.add_argument("step", choices=["analyst", "reviewer"])
     check.add_argument("--sample", action="store_true", help="sample mode: use corpus_sample/")
+    asm = sub.add_parser("assemble", help="stage 8: build the statements table and data dictionary (no LLM requests)")
+    asm.add_argument("--sample", action="store_true", help="sample mode: use corpus_sample/")
+    asm.add_argument("--annotation", metavar="DIR",
+                     help="read the records from this folder instead of data/annotation/<mode>/ "
+                          "(e.g. an earlier pilot kept by scripts/pilot.sh)")
+    asm.add_argument("--out", metavar="DIR", help="write the tables here instead of data/dataset/<mode>/")
+    st = sub.add_parser("stats", help="stage 9: descriptive statistics of one or more assembled datasets")
+    st.add_argument("--sample", action="store_true", help="sample mode: use data/dataset/sample/")
+    st.add_argument("--datasets", nargs="+", metavar="DIR",
+                    help="assembled datasets to describe; two or more are compared as repeated runs")
+    st.add_argument("--labels", nargs="+", metavar="NAME", help="short names of the datasets in the report")
+    st.add_argument("--name", help="report name: reports/05-statistics-<name>.md")
     sub.add_parser("models", help="list the model names the LiteLLM service offers")
     est = sub.add_parser("estimate", help="estimate requests and tokens before a run")
     est.add_argument("--sample", action="store_true", help="sample mode: use corpus_sample/")
@@ -64,6 +76,16 @@ def main() -> None:
         from . import checkreport
 
         return checkreport.run(cfg, args.step, sample=args.sample)
+    elif args.stage == "assemble":
+        from . import dataset
+
+        dataset.run(cfg, sample=args.sample, annotation=args.annotation, out=args.out)
+        return None
+    elif args.stage == "stats":
+        from . import stats
+
+        stats.run(cfg, sample=args.sample, datasets=args.datasets, labels=args.labels, name=args.name)
+        return None
     elif args.stage == "estimate":
         from . import estimate
 

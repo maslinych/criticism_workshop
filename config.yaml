@@ -34,6 +34,7 @@ paths:
   dist: dist                 # corpus release package made by `ncse package` (not in git)
   downloads: data/downloads  # corpus release downloaded by `ncse fetch` (not in git)
   annotation: data/annotation  # LLM answers and checked results, one file per article and step (not in git)
+  dataset: data/dataset        # assembled tables and data dictionary, one folder per mode (not in git; D-035)
 
 # The two periodicals.
 #   file:   the name the NCSE files use for this periodical

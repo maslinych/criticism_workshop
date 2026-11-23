@@ -146,7 +146,24 @@ export LITELLM_API_KEY=<your key>
 - **Failed items:** passages and statements of an accepted answer that fail a check are kept in the record with their reasons and listed in the report, but do not enter the data (D-027).
 - Each answer, accepted or not, is kept exactly as the model returned it. What the checks do is described in `docs/output-format.md`.
 
-Later stages (assembly, statistics) will be added here as they are built.
+**Dataset and statistics (stages 8–9):** no LLM requests; both run in seconds.
+
+| Stage | Command | What it does and writes |
+|---|---|---|
+| 8. Assemble | `uv run ncse assemble` | builds the tables from the checked records: `data/dataset/full/statements.csv` (one row per statement, deleted ones included and marked), `articles.csv`, `failed_items.csv`, `runs.csv`, `DATA_DICTIONARY.md` and `ASSEMBLY.json` (where the data came from, checksums) |
+| 9. Describe | `uv run ncse stats` | descriptive statistics of the assembled dataset: `reports/05-statistics.md` |
+
+- The columns of every table are described in `docs/data-dictionary.md` (the same text as `DATA_DICTIONARY.md`, written by the code; D-035).
+- Run `uv run ncse check analyst` and `uv run ncse check reviewer` first: assembly reads the stored results as they are. An article enters the dataset only when both steps are accepted and the review belongs to the current analyst answer.
+- **Comparing runs** (D-036). The LLM does not give the same answer twice, so the same articles annotated again give somewhat different numbers. To see which results are stable, assemble each run into its own folder and describe them together. For the two pilots:
+
+  ```
+  uv run ncse assemble --sample --annotation data/annotation/sample-before-20261123-101544 --out data/dataset/pilot-20261122
+  uv run ncse assemble --sample --annotation data/annotation/sample --out data/dataset/pilot-20261123
+  uv run ncse stats --datasets data/dataset/pilot-20261122 data/dataset/pilot-20261123 --labels pilot1 pilot2 --name pilots
+  ```
+
+  This writes `reports/05-statistics-pilots.md`: every number for each run, the gap between the runs next to the uncertainty that comes from the sample of articles, and how many individual judgements the runs share.
 
 ## Building the corpus or fetching the published one
 

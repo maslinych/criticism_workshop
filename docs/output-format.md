@@ -199,7 +199,9 @@ Then the code applies the actions. Deleted statements and fields **stay in the d
 - Only problems with the whole answer lead to a retry. Failed passages and statements (section 3) are set aside without a retry (D-027): asking again costs a full answer, and in the smoke tests the model did not correct such items when asked. Each failed item is kept in the record with its reasons and listed in the stage report; it is never dropped silently. The reviewer sees only the accepted statements.
 - Every answer, accepted or not, is stored. A run that is interrupted continues with the articles that have no accepted answer yet; paid requests are never repeated.
 
-## 7. The final statements table (draft)
+## 7. The final statements table
+
+*Implemented in stage 8 (`uv run ncse assemble`, D-035); the column names and their descriptions are fixed in `docs/data-dictionary.md`. Differences from the draft below: the statement's position also gives `expression_start` and `expression_end`; provenance is given per statement as model, prompt version, prompt checksum, run identifier and answer time for each step, with the model settings in `runs.csv`; failed items are in `failed_items.csv`. The draft is kept for the record.*
 
 `statements.csv`, one row per statement, deleted statements included. Failed items (section 3) are not statements of the dataset; they are listed separately, with their reasons. The final column names and descriptions are fixed in the data dictionary at stage 8; this is the intended shape.
 
