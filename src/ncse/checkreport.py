@@ -128,13 +128,15 @@ def run(cfg: dict, step: str, sample: bool = False) -> None:
             for key in ("prompt_tokens", "completion_tokens"):
                 tokens[key] += (a.get("usage") or {}).get(key, 0)
         tokens["requests"] += len(record["attempts"])
-        if record["attempts"]:
-            attempts_hist[len(record["attempts"])] += 1
+        per_unit = Counter(a.get("part") for a in record["attempts"])  # part None: article sent whole
+        for n in per_unit.values():
+            attempts_hist[n] += 1
         if record["status"] == "failed":
             failed_articles.append((aid, record["errors"]))
         if record["status"] != "accepted":
             continue
-        versions[f"{record.get('model')} / prompt {record.get('prompt_version')}"] += 1
+        versions["no request (no statements to review)" if record.get("sent") is False
+                 else f"{record.get('model')} / prompt {record.get('prompt_version')}"] += 1
         for f in record["flags"]:
             flags[f["flag"]] += 1
         for item in record["result"].get("failed", []):
@@ -180,7 +182,9 @@ def run(cfg: dict, step: str, sample: bool = False) -> None:
               f"- requests (attempts): {tokens['requests']}",
               f"- prompt tokens: {tokens['prompt_tokens']:,}",
               f"- completion tokens: {tokens['completion_tokens']:,}", "",
-              "Attempts per article:", "", *_table(attempts_hist, ("attempts", "articles")), "",
+              "Attempts per request: for an article sent whole, or for one part of a long article "
+              "(the first attempt and any retries):", "",
+              *_table(attempts_hist, ("attempts", "articles or parts")), "",
               "Model and prompt of the accepted answers:", "", *_table(versions, ("model / prompt", "articles")), "",
               "## Failed checks (all attempts)", "",
               "These checks concern an answer as a whole: a failed check makes the code reject the answer "

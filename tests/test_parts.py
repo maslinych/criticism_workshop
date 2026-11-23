@@ -186,6 +186,14 @@ def test_a_failed_part_fails_the_article_and_only_it_is_retried(cfg):
     assert rec["status"] == "accepted" and [p["part"] for p in rec["result"]["passages"]] == [1, 2]
 
 
+def test_two_empty_answers_do_not_stop_the_retries(cfg):
+    # An empty answer (the reasoning looped) is random: a second empty answer is
+    # not "the same answer again", so the third attempt is still made.
+    client = FakeClient([answer(Q1), "", "", answer(Q2)])
+    run(cfg, "analyst", client)
+    assert len(client.requests) == 4 and record(cfg)["status"] == "accepted"
+
+
 def test_parts_done_but_not_joined_are_joined_on_the_next_run(cfg):
     run(cfg, "analyst", FakeClient([answer(Q1), answer(Q2)]))
     folder = annotate.output_folder(cfg, "analyst", True)

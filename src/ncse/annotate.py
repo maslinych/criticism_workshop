@@ -14,8 +14,8 @@ anything else happens, so a paid answer is never lost.
 Each answer is checked at once (checks.py). An answer that is unusable as a
 whole (not a bare JSON object, wrong format, cut off) is rejected and retried,
 at most `annotation.max_retries` times, with a message listing what failed. If
-the model returns exactly the same answer twice in a row, no further attempt is
-made. In an accepted analyst answer, passages and statements that break a rule
+the model returns exactly the same (non-empty) answer twice in a row, no further
+attempt is made. In an accepted analyst answer, passages and statements that break a rule
 are set aside as failed items, with their reasons, and the rest is kept (D-027).
 An article whose answer is accepted, or that has used up its attempts (failed),
 is done: running the stage again skips it. `--retry-failed` gives failed
@@ -501,9 +501,13 @@ class StepRunner:
 
     @staticmethod
     def repeated(record: dict, round_start: int) -> bool:
-        """Whether the last two answers of this round are exactly the same."""
+        """Whether the last two answers of this round are exactly the same.
+        Empty answers do not count: they come from the model's reasoning running
+        in a loop until it stops, which happens at random, so a retry may well
+        succeed."""
         tries = record["attempts"][round_start:]
-        return len(tries) >= 2 and tries[-1].get("raw_response") == tries[-2].get("raw_response")
+        return (len(tries) >= 2 and bool((tries[-1].get("raw_response") or "").strip())
+                and tries[-1].get("raw_response") == tries[-2].get("raw_response"))
 
     def echo(self, attempt: dict) -> str:
         """The rejected answer as it is sent back with a retry.
