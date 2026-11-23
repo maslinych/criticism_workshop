@@ -18,7 +18,11 @@ Two kinds of uncertainty are reported side by side:
   "sampling ±" column says how far a share would move, in 95 of 100 cases, if
   another sample of the same number of articles had been drawn. It is computed
   with the usual formula for a share counted over groups (here: articles),
-  which allows for the statements of one article being alike.
+  which allows for the statements of one article being alike. As a check, the
+  same interval is also found by resampling ("bootstrap ±"): the articles are
+  drawn again at random, with replacement, a few thousand times, and the share
+  is recomputed each time; the middle 95% of these shares gives the interval.
+  When the two agree, the formula can be trusted at this sample size.
 
 Statements of different runs are also matched one to one, by where their
 evaluative expressions sit in the article: two statements of the same article
@@ -30,10 +34,14 @@ Everything here is counting and arithmetic done by code; no LLM is used.
 """
 
 import math
+import statistics
 from collections import Counter, defaultdict
 from itertools import combinations
 from pathlib import Path
 
+import numpy as np
+
+from . import figures
 from .config import PROJECT_ROOT
 from .dataset import CONTROLLED, LEVEL_VALUES, default_folders, read_csv
 from .runlog import RunLog
@@ -91,6 +99,22 @@ def share_halfwidth(per_article: list[tuple[float, float]]) -> float | None:
     r = sum(y for y, _ in per_article) / total_x
     var = n / (n - 1) * sum((y - r * x) ** 2 for y, x in per_article) / total_x ** 2
     return Z95 * math.sqrt(var)
+
+
+def bootstrap_halfwidth(per_article: list[tuple[float, float]], idx: np.ndarray) -> float | None:
+    """95% half-width of the share Σy/Σx found by resampling articles.
+
+    idx holds one row of article positions per resample (drawn with
+    replacement); the share is recomputed for each row, and the interval is
+    the middle 95% of the results."""
+    if len(per_article) < 2 or not sum(x for _, x in per_article):
+        return None
+    y = np.array([p[0] for p in per_article], dtype=float)
+    x = np.array([p[1] for p in per_article], dtype=float)
+    ys, xs = y[idx].sum(axis=1), x[idx].sum(axis=1)
+    shares = ys[xs > 0] / xs[xs > 0]
+    lo, hi = np.percentile(shares, [2.5, 97.5])
+    return float(hi - lo) / 2
 
 
 def kappa(pairs: list[tuple[str, str]]) -> float | None:
@@ -189,10 +213,15 @@ def table(head: list[str], rows: list[list]) -> list[str]:
 
 
 class Report:
-    def __init__(self, runs: list[dict], labels: list[str]):
+    def __init__(self, runs: list[dict], labels: list[str], bootstrap: int = 2000, seed: int = 1850):
         self.runs, self.labels = runs, labels
         self.multi = len(runs) > 1
         self.gaps: list[tuple[float, float | None, str]] = []  # (gap in points, sampling ±, what)
+        self.intervals: list[tuple[str, str, int, float, float]] = []  # (share, run, n, formula ±, bootstrap ±)
+        self.panels: list[dict] = []  # data for the chart of shares
+        # One fixed set of resamples per run, so that the report is the same every time.
+        self.idx = [np.random.default_rng(seed).integers(0, len(ds["articles"]), (bootstrap, len(ds["articles"])))
+                    if ds["articles"] else None for ds in runs]
 
     # A distribution: for each value, the share of kept statements in each run.
     def distribution(self, title: str, key, values: list[str] | None = None) -> list[str]:
@@ -206,27 +235,43 @@ class Report:
         seen = sorted({key(s) for ks, _ in per_run for s in ks}, key=str)
         values = [v for v in (values or []) if v in seen] + [v for v in seen if v not in (values or [])]
         head = ["value", *self.labels]
-        if self.multi:
-            head += ["runs differ by", "sampling ±", "gap vs sampling"]
+        head += ["runs differ by", "sampling ±", "bootstrap ±", "gap vs sampling"] if self.multi \
+            else ["sampling ±", "bootstrap ±"]
         rows = []
+        panel = {"title": title, "values": [v or "(empty)" for v in values],
+                 "shares": [[] for _ in self.runs], "hw": [[] for _ in self.runs]}
         for v in values:
-            row, shares, widths, ns = [v or "(empty)"], [], [], []
-            for ds, (ks, by_article) in zip(self.runs, per_run):
+            row, shares, widths, boots, ns = [v or "(empty)"], [], [], [], []
+            for r, (ds, (ks, by_article)) in enumerate(zip(self.runs, per_run)):
                 n = sum(1 for s in ks if key(s) == v)
                 row.append(pct(n, len(ks)))
                 ns.append(n)
                 shares.append(100 * n / len(ks) if ks else 0)
-                hw = share_halfwidth([(by_article[a["article_id"]][v], sum(by_article[a["article_id"]].values()))
-                                      for a in ds["articles"]])
+                per_article = [(by_article[a["article_id"]][v], sum(by_article[a["article_id"]].values()))
+                               for a in ds["articles"]]
+                hw = share_halfwidth(per_article)
+                boot = bootstrap_halfwidth(per_article, self.idx[r]) if self.idx[r] is not None else None
+                panel["shares"][r].append(shares[-1])
+                panel["hw"][r].append(100 * hw if hw is not None else 0)
                 if hw is not None:
                     widths.append(100 * hw)
+                if boot is not None:
+                    boots.append(100 * boot)
+                if hw is not None and boot is not None and n >= MIN_FOR_VERDICT:
+                    self.intervals.append((f"{title}: {v or '(empty)'}", self.labels[r], n, 100 * hw, 100 * boot))
+            enough = max(ns) >= MIN_FOR_VERDICT
+            sampling = sum(widths) / len(widths) if widths and enough else None
+            boot = sum(boots) / len(boots) if boots and enough else None
             if self.multi:
                 gap = max(shares) - min(shares)
-                sampling = sum(widths) / len(widths) if widths and max(ns) >= MIN_FOR_VERDICT else None
                 row += [f"{gap:.0f} points", f"±{sampling:.0f}" if sampling is not None else "–",
+                        f"±{boot:.0f}" if boot is not None else "–",
                         "too few to say" if sampling is None else "larger" if gap > sampling else "smaller"]
                 self.gaps.append((gap, sampling, f"{title}: {v or '(empty)'}"))
+            else:
+                row += [f"±{sampling:.0f}" if sampling is not None else "–", f"±{boot:.0f}" if boot is not None else "–"]
             rows.append(row)
+        self.panels.append(panel)
         return [f"### {title}", "", *table(head, rows), ""]
 
     def counts(self, rows: list[tuple[str, callable]]) -> list[str]:
@@ -258,8 +303,11 @@ def words(ds: dict) -> int:
 # ---------------------------------------------------------------- the report
 
 
-def build_report(runs: list[dict], labels: list[str], excluded: dict[str, list[str]], command: str) -> str:
-    rep = Report(runs, labels)
+def build_report(runs: list[dict], labels: list[str], excluded: dict[str, list[str]], command: str,
+                 fig=None, bootstrap: int = 2000, seed: int = 1850) -> str:
+    """The report as Markdown. `fig` (a figures.Figures) draws the charts; without it there are none."""
+    rep = Report(runs, labels, bootstrap, seed)
+    show = (lambda line: [line, ""]) if fig else (lambda line: [])
     multi = rep.multi
     L = ["# Descriptive statistics" + (" — comparison of runs" if multi else ""), "",
          f"Generated by `{command}` (`src/ncse/stats.py`) from the assembled tables (stage 8). "
@@ -295,6 +343,8 @@ def build_report(runs: list[dict], labels: list[str], excluded: dict[str, list[s
               "sample size, the choice of articles matters more than the run; a larger gap means that the "
               "result depends on the run itself.", ""]
 
+    glance_at = len(L)
+
     # 2. overview
     L += ["## 2. Overview", ""]
     L += rep.counts([
@@ -324,6 +374,21 @@ def build_report(runs: list[dict], labels: list[str], excluded: dict[str, list[s
                 row.append(f"{n} in {arts} art. · {per_thousand(n, w):.1f}")
             rows.append(row)
         L += [f"### {title}", "", *table([title.lower(), *labels], rows), ""]
+    if fig:
+        groups, rates, hws, breaks = [], [[] for _ in runs], [[] for _ in runs], []
+        for key in (lambda r: r["periodical"], decade):
+            if groups:
+                breaks.append(len(groups) - 1)
+            for g in sorted({key(a) for ds in runs for a in ds["articles"]}):
+                groups.append(f"{g} ({sum(1 for a in runs[0]['articles'] if key(a) == g)} art.)")
+                for r, ds in enumerate(runs):
+                    counts = Counter(s["article_id"] for s in kept(ds))
+                    arts = [a for a in ds["articles"] if key(a) == g]
+                    w = sum(int(a["n_words"]) for a in arts)
+                    rates[r].append(per_thousand(sum(counts[a["article_id"]] for a in arts), w))
+                    hw = share_halfwidth([(counts[a["article_id"]], int(a["n_words"])) for a in arts])
+                    hws[r].append(1000 * hw if hw is not None else None)
+        L += show(fig.rates(groups, rates, hws, labels, breaks=breaks))
     if multi:
         rows = []
         for ds, label in zip(runs, labels):
@@ -336,23 +401,40 @@ def build_report(runs: list[dict], labels: list[str], excluded: dict[str, list[s
 
     # 4. distributions
     L += ["## 4. What the kept statements say", ""]
-    L += rep.distribution("Art", lambda s: s["art"], CONTROLLED["art"])
-    L += rep.distribution("Polarity", lambda s: s["polarity"], CONTROLLED["polarity"])
-    L += rep.distribution("Criterion", lambda s: s["criterion"], CONTROLLED["criterion"])
-    L += rep.distribution("Sarcastic", lambda s: s["sarcastic"], CONTROLLED["sarcastic"])
-    L += rep.distribution("Quoted (someone else's opinion reported)",
-                          lambda s: "yes" if filled(s, "quoted_source") else "no", ["yes", "no"])
-    L += rep.distribution("Target named: creator, work title, both, or genre only",
+    blocks = []
+    blocks += rep.distribution("Art", lambda s: s["art"], CONTROLLED["art"])
+    blocks += rep.distribution("Polarity", lambda s: s["polarity"], CONTROLLED["polarity"])
+    blocks += rep.distribution("Criterion", lambda s: s["criterion"], CONTROLLED["criterion"])
+    blocks += rep.distribution("Sarcastic", lambda s: s["sarcastic"], CONTROLLED["sarcastic"])
+    blocks += rep.distribution("Quoted (someone else's opinion reported)",
+                               lambda s: "yes" if filled(s, "quoted_source") else "no", ["yes", "no"])
+    blocks += rep.distribution("Target named",
                           lambda s: ("creator and title" if filled(s, "creator") and filled(s, "work_title")
                                      else "creator only" if filled(s, "creator")
                                      else "title only" if filled(s, "work_title") else "genre only"),
                           ["creator and title", "creator only", "title only", "genre only"])
-    L += rep.distribution("Statement evidence level (after review)", lambda s: s["evidence"], LEVEL_VALUES)
-    L += rep.distribution("Periodical (share of kept statements)", lambda s: s["periodical"])
+    blocks += rep.distribution("Evidence level (after review)", lambda s: s["evidence"], LEVEL_VALUES)
+    blocks += rep.distribution("Periodical", lambda s: s["periodical"])
+    if fig:
+        L += show(fig.shares([p for p in rep.panels if p["title"] in
+                              ("Art", "Polarity", "Criterion", "Target named", "Evidence level (after review)")],
+                             labels))
+    L += blocks
 
     # 5. cross-tabulations
     L += ["## 5. Combinations", "", "### Share of positive judgements, by criterion and by art", "",
           "Kept statements; *n* is the number of statements in the row.", ""]
+    if fig:
+        panels = []
+        for title, key, values in (("Art", lambda s: s["art"], CONTROLLED["art"]),
+                                   ("Criterion", lambda s: s["criterion"], CONTROLLED["criterion"])):
+            vals = [v for v in values if any(key(s) == v for ds in runs for s in kept(ds))]
+            panels.append({"title": title, "values": vals,
+                           "pos": [[sum(1 for s in kept(ds) if key(s) == v and s["polarity"] == "positive")
+                                    for v in vals] for ds in runs],
+                           "neg": [[sum(1 for s in kept(ds) if key(s) == v and s["polarity"] == "negative")
+                                    for v in vals] for ds in runs]})
+        L += show(fig.polarity(panels, labels))
     for title, key, values in (("criterion", lambda s: s["criterion"], CONTROLLED["criterion"]),
                                ("art", lambda s: s["art"], CONTROLLED["art"]),
                                ("periodical", lambda s: s["periodical"], None)):
@@ -439,6 +521,11 @@ def build_report(runs: list[dict], labels: list[str], excluded: dict[str, list[s
             mad = sum(abs(x - y) for x, y in zip(xs, ys)) / len(ids) if ids else 0
             L += [f"{a} vs {b}: correlation of kept statements per article {fmt(pearson(xs, ys))}; "
                   f"on average an article's count differs by {mad:.1f} statements.", ""]
+            if fig:
+                split = [int(by_run[i][2][aid]["n_parts"]) > 1 or int(by_run[j][2][aid]["n_parts"]) > 1
+                         for aid in ids]
+                suffix = "" if len(labels) == 2 else f"-{a}-{b}"
+                L += show(fig.per_article(list(zip(ids, xs, ys, split)), a, b, name="per-article" + suffix))
 
         # 8. matching
         L += ["## 8. Do the runs find the same judgements?", "",
@@ -449,7 +536,8 @@ def build_report(runs: list[dict], labels: list[str], excluded: dict[str, list[s
         for (i, a), (j, b) in combinations(enumerate(labels), 2):
             pairs, only_a, only_b = match_statements(runs[i]["statements"], runs[j]["statements"])
             split = {x["article_id"] for ds in (runs[i], runs[j]) for x in ds["articles"] if int(x["n_parts"]) > 1}
-            L += pair_section(a, b, pairs, only_a, only_b, split)
+            L += pair_section(a, b, pairs, only_a, only_b, split, fig=fig,
+                              suffix="" if len(labels) == 2 else f"-{a}-{b}")
 
     # 9. stability summary
     if multi and rep.gaps:
@@ -467,7 +555,66 @@ def build_report(runs: list[dict], labels: list[str], excluded: dict[str, list[s
         L += ["The largest gaps between runs, whatever their sampling uncertainty:", "",
               *table(["share", "runs differ by", "sampling ±"],
                      [[w, f"{g:.0f} points", f"±{s:.0f}" if s is not None else "–"] for g, s, w in big]), ""]
+
+    # 10. formula against resampling
+    if rep.intervals:
+        ratios = [b / f for _, _, _, f, b in rep.intervals if f > 0]
+        n_boot = len(rep.idx[0]) if rep.idx and rep.idx[0] is not None else 0
+        L += [f"## {10 if multi else 7}. Checking the sampling intervals by resampling", "",
+              "The *sampling ±* above comes from a formula. As a check, each share was also recomputed on "
+              f"{n_boot:,} random samples of the same articles, drawn with replacement (a *bootstrap*; "
+              "fixed random seed, so the numbers are the same on every run); the middle 95% of the results "
+              "gives the *bootstrap ±*. Compared here for every share with at least "
+              f"{MIN_FOR_VERDICT} statements, in each run.", "",
+              f"Bootstrap ± divided by formula ±: median {statistics.median(ratios):.2f}, "
+              f"from {min(ratios):.2f} to {max(ratios):.2f} ({len(ratios)} shares). A value near 1 means "
+              "the formula is trustworthy at this sample size; well below 1 means the formula is too "
+              "cautious, well above 1 that it is too confident.", ""]
+        if fig:
+            L += show(fig.intervals([(f, b) for _, _, _, f, b in rep.intervals]))
+        L += table(["share", "run", "statements", "formula ±", "bootstrap ±"],
+                   [[w, r, n, f"{f:.1f}", f"{b:.1f}"] for w, r, n, f, b in rep.intervals]) + [""]
+    L[glance_at:glance_at] = at_a_glance(rep, runs, labels)
     return "\n".join(L)
+
+
+def at_a_glance(rep: "Report", runs: list[dict], labels: list[str]) -> list[str]:
+    """The main numbers of the report in a few lines, all computed (no interpretation)."""
+    out = ["## At a glance", ""]
+    for ds, label in zip(runs, labels):
+        k = kept(ds)
+        pos = sum(s["polarity"] == "positive" for s in k)
+        out.append(f"- **{label}**: {len(ds['statements'])} statements in {len(ds['articles'])} articles, "
+                   f"{len(k)} kept by the reviewer ({per_thousand(len(k), words(ds)):.1f} per 1,000 words); "
+                   f"{pct(pos, len(k))} positive.")
+    if rep.multi:
+        judged = [g for g in rep.gaps if g[1] is not None]
+        larger = [g for g in judged if g[0] > g[1]]
+        if judged:
+            big = max(judged, key=lambda g: g[0])
+            out.append(f"- **Shares** (sections 4, 6, 9): of {len(judged)} shares with enough statements, "
+                       f"{len(judged) - len(larger)} differ between runs by less than their sampling uncertainty; "
+                       f"the largest gap is {big[0]:.0f} points ({big[2]}, sampling ±{big[1]:.0f}).")
+        for (i, a), (j, b) in combinations(enumerate(labels), 2):
+            pairs, only_a, only_b = match_statements(runs[i]["statements"], runs[j]["statements"])
+            distinct = len(pairs) + len(only_a) + len(only_b)
+            if not pairs:
+                continue
+            agree = []
+            for name, key in AGREEMENT_FIELDS:
+                if name in ("polarity", "criterion", "statement evidence level (analyst)"):
+                    pp = [(key(x), key(y)) for x, y in pairs]
+                    agree.append(f"{name.replace(' (analyst)', '')} {100 * sum(x == y for x, y in pp) / len(pp):.0f}%"
+                                 f" (kappa {fmt(kappa(pp))})")
+            out.append(f"- **Single judgements** (section 8): of {distinct} distinct judgements, "
+                       f"{pct(len(pairs), distinct)} were found by both {a} and {b}, {pct(len(only_a), distinct)} "
+                       f"only by {a}, {pct(len(only_b), distinct)} only by {b}. Where both found a judgement, "
+                       f"they agree on " + ", ".join(agree) + ".")
+    if rep.intervals:
+        ratios = [b / f for _, _, _, f, b in rep.intervals if f > 0]
+        out.append(f"- **Sampling intervals** (section {10 if rep.multi else 7}): resampling the articles gives "
+                   f"intervals {statistics.median(ratios):.2f} times as wide as the formula (median).")
+    return out + [""]
 
 
 AGREEMENT_FIELDS = [
@@ -486,7 +633,7 @@ def one_line(text: str) -> str:
 
 
 def pair_section(a: str, b: str, pairs, only_a, only_b, split: set[str] | None = None,
-                 examples: int = 8) -> list[str]:
+                 examples: int = 8, fig=None, suffix: str = "") -> list[str]:
     n_a, n_b = len(pairs) + len(only_a), len(pairs) + len(only_b)
     distinct = len(pairs) + len(only_a) + len(only_b)
     L = [f"### {a} and {b}", "",
@@ -498,6 +645,7 @@ def pair_section(a: str, b: str, pairs, only_a, only_b, split: set[str] | None =
              ["distinct judgements in all", distinct]]), "",
          f"Of the statements of {a}, {pct(len(pairs), n_a)} have a partner in {b}; "
          f"of those of {b}, {pct(len(pairs), n_b)} have one in {a}.", ""]
+    groups = [("all articles", len(pairs), len(only_a), len(only_b))]
     if split:
         rows = []
         for title, test in ((f"sent in parts in at least one run ({len(split)} articles)", lambda s: s in split),
@@ -506,8 +654,12 @@ def pair_section(a: str, b: str, pairs, only_a, only_b, split: set[str] | None =
             oa = sum(1 for s in only_a if test(s["article_id"]))
             ob = sum(1 for s in only_b if test(s["article_id"]))
             rows.append([title, pct(pp, pp + oa + ob), pct(oa, pp + oa + ob), pct(ob, pp + oa + ob)])
+            groups.append((title.split(" (")[0].replace("sent in parts in at least one run", "sent in parts"),
+                           pp, oa, ob))
         L += ["The same, separately for articles annotated in parts (D-034) and articles sent whole:", "",
               *table(["articles", "found by both", f"only {a}", f"only {b}"], rows), ""]
+    if fig:
+        L += [fig.matching(groups, a, b, name="matching" + suffix), ""]
     # kept statements and the reviewer
     ka = [p for p in pairs if p[0]["deleted"] == "no"]
     kb = [p for p in pairs if p[1]["deleted"] == "no"]
@@ -530,10 +682,18 @@ def pair_section(a: str, b: str, pairs, only_a, only_b, split: set[str] | None =
     tgt = sum(same_target(x, y) or (not (x["creator"] or x["work_title"] or y["creator"] or y["work_title"]))
               for x, y in pairs)
     rows.append(["target (same creator or title, written alike)", pct(tgt, len(pairs)), "–"])
+    chart = []
+    if fig and pairs:
+        data = []
+        for name, key in AGREEMENT_FIELDS:
+            pp = [(key(x), key(y)) for x, y in pairs]
+            data.append((name, 100 * sum(x == y for x, y in pp) / len(pp), kappa(pp)))
+        data.append(("target (same name or title)", 100 * tgt / len(pairs), None))
+        chart = [fig.agreement(data, a, b, name="agreement" + suffix), ""]
     L += ["Agreement on the paired statements. *Same* is the share of pairs with the same value; *kappa* "
           "corrects it for the agreement two runs would reach by chance with these proportions (1 = always "
           "the same, 0 = no better than chance; above about 0.6 is usually called substantial, below 0.4 "
-          "weak).", "", *table(["field", "same", "kappa"], rows), ""]
+          "weak).", "", *chart, *table(["field", "same", "kappa"], rows), ""]
     # criterion confusion
     crit = CONTROLLED["criterion"]
     c = Counter((x["criterion"], y["criterion"]) for x, y in pairs)
@@ -583,9 +743,18 @@ def run(cfg: dict, sample: bool = False, datasets: list[str] | None = None, labe
             command += " --labels " + " ".join(labels)
         if name:
             command += f" --name {name}"
-    text = build_report(runs, labels, excluded, command)
-    report = cfg["paths"]["reports"] / ("05-statistics" + (f"-{name}" if name else "") + ".md")
+    stem = "05-statistics" + (f"-{name}" if name else "")
+    report = cfg["paths"]["reports"] / f"{stem}.md"
+    # Charts go to reports/figures/<report name>/; old ones are removed first, so none is left stale.
+    folder = cfg["paths"]["reports"] / "figures" / stem
+    for old in folder.glob("*.svg") if folder.exists() else []:
+        old.unlink()
+    fig = figures.Figures(folder, f"figures/{stem}")
+    settings = cfg.get("stats", {})
+    text = build_report(runs, labels, excluded, command, fig=fig,
+                        bootstrap=settings.get("bootstrap", 2000), seed=settings.get("seed", 1850))
     report.write_text(text + "\n", encoding="utf-8")
+    log.count("charts", len(fig.written))
     for ds, label in zip(runs, labels):
         log.count(f"{label}: articles", len(ds["articles"]))
         log.count(f"{label}: statements kept", len(kept(ds)))

@@ -137,6 +137,15 @@ def test_kappa_and_share_halfwidth():
     assert stats.share_halfwidth([(2, 2), (0, 2)]) == pytest.approx(1.96 * 0.5)  # var = 2 · 2 / 4²
 
 
+def test_bootstrap_agrees_with_formula_on_regular_data():
+    import numpy as np
+    per_article = [(k % 3, 3) for k in range(40)]  # shares 0, 1/3, 2/3 repeating
+    idx = np.random.default_rng(1).integers(0, 40, (4000, 40))
+    boot, formula = stats.bootstrap_halfwidth(per_article, idx), stats.share_halfwidth(per_article)
+    assert boot == pytest.approx(formula, rel=0.15)
+    assert stats.bootstrap_halfwidth([(1, 2)], idx[:, :1]) is None  # one article: no interval
+
+
 def st(aid, start, end, **kw):
     base = {"article_id": aid, "expression_start": str(start), "expression_end": str(end), "creator": "",
             "work_title": "", "polarity": "positive", "criterion": "aesthetic value"}
@@ -162,6 +171,16 @@ def test_stats_report_for_one_and_two_runs(cfg):
     two = stats.run(cfg, datasets=[str(out), str(out)], labels=["a", "b"], name="twice").read_text()
     assert "found by both (pairs) | 2 (100%)" in two
     assert "| criterion | 2 (100%) | 1.00 |" in two
+    # charts are written next to the report and shown in it; the same data give the same files
+    folder = cfg["paths"]["reports"] / "figures" / "05-statistics-twice"
+    names = sorted(p.name for p in folder.glob("*.svg"))
+    assert {"shares.svg", "polarity.svg", "matching.svg", "agreement.svg", "per-article.svg"} <= set(names)
+    for name in names:
+        assert f"](figures/05-statistics-twice/{name})" in two
+    before = {n: (folder / n).read_bytes() for n in names}
+    stats.run(cfg, datasets=[str(out), str(out)], labels=["a", "b"], name="twice")
+    assert {n: (folder / n).read_bytes() for n in names} == before
+    assert "## At a glance" in two and "bootstrap ±" in two
 
 
 # ---------------------------------------------------------------- integrity of assembled data

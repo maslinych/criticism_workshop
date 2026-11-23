@@ -166,3 +166,8 @@ llm:
   pause: 10              # seconds before the first such try; doubles each time
   slow_failure: 120      # a gateway error (HTTP 502/504) or time-out after this many seconds is
                          # not retried: the model needs longer than the service allows
+
+# Descriptive statistics (stage 9, D-036; src/ncse/stats.py).
+stats:
+  bootstrap: 2000   # random resamples of the articles, to check the sampling intervals of the formula
+  seed: 1850        # fixed, so that the report is the same every time it is made

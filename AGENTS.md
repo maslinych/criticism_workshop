@@ -125,7 +125,7 @@ A quick map of the project for coding agents and new contributors. The rules abo
 - `rebuild.py` (pure functions, D-016) cuts issues into units at headings and turns them into articles.
 - `prompts/<step>/v<N>/` (project root): prompt texts and the JSON schema of each answer (D-022); the format is specified in `docs/output-format.md`.
 - `checks.py` (pure functions) checks both LLM steps' answers; `quotes.py` matches quotations; `annotate.py` runs the analyst and reviewer (records in `data/annotation/`, resumable); `parts.py` splits long articles into parts and joins the results (D-034); `checkreport.py` re-checks stored answers and writes reports; `llm.py` is the LiteLLM client; `prompts.py` loads prompt versions; `estimate.py` estimates cost.
-- `inspection.py` and `prepare.py` are stages 2 and 3; `rawsample.py` draws the raw NCSE sample; `release.py` (package) and `fetch.py` handle the corpus release; `runlog.py` writes run logs with counts to `logs/`. `dataset.py` (stage 8) assembles the CSV tables and the data dictionary (`docs/data-dictionary.md`) into `data/dataset/<mode>/`; `stats.py` (stage 9) writes the descriptive statistics, comparing runs when given several datasets.
+- `inspection.py` and `prepare.py` are stages 2 and 3; `rawsample.py` draws the raw NCSE sample; `release.py` (package) and `fetch.py` handle the corpus release; `runlog.py` writes run logs with counts to `logs/`. `dataset.py` (stage 8) assembles the CSV tables and the data dictionary (`docs/data-dictionary.md`) into `data/dataset/<mode>/`; `stats.py` (stage 9) writes the descriptive statistics, comparing runs when given several datasets; `figures.py` draws its charts (SVG, matplotlib).
 
 **NCSE facts the code relies on**
 

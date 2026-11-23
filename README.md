@@ -151,7 +151,7 @@ export LITELLM_API_KEY=<your key>
 | Stage | Command | What it does and writes |
 |---|---|---|
 | 8. Assemble | `uv run ncse assemble` | builds the tables from the checked records: `data/dataset/full/statements.csv` (one row per statement, deleted ones included and marked), `articles.csv`, `failed_items.csv`, `runs.csv`, `DATA_DICTIONARY.md` and `ASSEMBLY.json` (where the data came from, checksums) |
-| 9. Describe | `uv run ncse stats` | descriptive statistics of the assembled dataset: `reports/05-statistics.md` |
+| 9. Describe | `uv run ncse stats` | descriptive statistics of the assembled dataset, with charts: `reports/05-statistics.md` and `reports/figures/05-statistics/*.svg` |
 
 - The columns of every table are described in `docs/data-dictionary.md` (the same text as `DATA_DICTIONARY.md`, written by the code; D-035).
 - Run `uv run ncse check analyst` and `uv run ncse check reviewer` first: assembly reads the stored results as they are. An article enters the dataset only when both steps are accepted and the review belongs to the current analyst answer.
@@ -163,7 +163,7 @@ export LITELLM_API_KEY=<your key>
   uv run ncse stats --datasets data/dataset/pilot-20261122 data/dataset/pilot-20261123 --labels pilot1 pilot2 --name pilots
   ```
 
-  This writes `reports/05-statistics-pilots.md`: every number for each run, the gap between the runs next to the uncertainty that comes from the sample of articles, and how many individual judgements the runs share.
+  This writes `reports/05-statistics-pilots.md`: every number for each run, the gap between the runs next to the uncertainty that comes from the sample of articles (checked by resampling the articles), and how many individual judgements the runs share. The charts are SVG files in `reports/figures/05-statistics-pilots/`, shown in the report when it is opened on GitHub or GitLab (D-037).
 
 ## Building the corpus or fetching the published one
 

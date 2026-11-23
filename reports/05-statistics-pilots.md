@@ -14,6 +14,14 @@ Left out of pilot2: `LDR-1857-02-14-007` (not in every run).
 
 **How to read the comparison columns.** *Runs differ by* is the gap between the highest and the lowest run. *Sampling ±* is the uncertainty that comes from having only these articles: another sample of the same size would give a share within about this many percentage points of the one found, 95 times in 100 (averaged over the runs). *Gap vs sampling* says whether the runs differ by more than that; for a value with fewer than 10 statements in every run it says *too few to say*. A gap smaller than the sampling uncertainty means that, at this sample size, the choice of articles matters more than the run; a larger gap means that the result depends on the run itself.
 
+## At a glance
+
+- **pilot1**: 237 statements in 23 articles, 215 kept by the reviewer (9.4 per 1,000 words); 156 (73%) positive.
+- **pilot2**: 265 statements in 23 articles, 241 kept by the reviewer (10.5 per 1,000 words); 178 (74%) positive.
+- **Shares** (sections 4, 6, 9): of 20 shares with enough statements, 20 differ between runs by less than their sampling uncertainty; the largest gap is 5 points (Target named: genre only, sampling ±10).
+- **Single judgements** (section 8): of 293 distinct judgements, 209 (71%) were found by both pilot1 and pilot2, 28 (10%) only by pilot1, 56 (19%) only by pilot2. Where both found a judgement, they agree on polarity 99% (kappa 0.97), criterion 90% (kappa 0.74), statement evidence level 73% (kappa 0.47).
+- **Sampling intervals** (section 10): resampling the articles gives intervals 0.98 times as wide as the formula (median).
+
 ## 2. Overview
 
 |  | pilot1 | pilot2 | runs differ by |
@@ -48,6 +56,8 @@ Kept statements, and kept statements per 1,000 words of the articles in that gro
 | 1830s | 66 in 6 art. · 11.0 | 73 in 6 art. · 12.2 |
 | 1850s | 132 in 11 art. · 10.7 | 142 in 11 art. · 11.5 |
 
+![Kept statements per 1,000 words by periodical and decade, per run](figures/05-statistics-pilots/rates.svg)
+
 Rate of kept statements per 1,000 words with its sampling uncertainty:
 
 | run | per 1,000 words | sampling ± |
@@ -57,76 +67,80 @@ Rate of kept statements per 1,000 words with its sampling uncertainty:
 
 ## 4. What the kept statements say
 
+![Shares of kept statements by art, polarity, criterion, target and evidence, per run, with sampling intervals](figures/05-statistics-pilots/shares.svg)
+
 ### Art
 
-| value | pilot1 | pilot2 | runs differ by | sampling ± | gap vs sampling |
-|---|---|---|---|---|---|
-| literature | 129 (60%) | 153 (63%) | 3 points | ±20 | smaller |
-| music | 3 (1%) | 2 (1%) | 1 points | – | too few to say |
-| theatre | 35 (16%) | 38 (16%) | 1 points | ±15 | smaller |
-| visual art | 48 (22%) | 44 (18%) | 4 points | ±17 | smaller |
-| other | 0 (0%) | 4 (2%) | 2 points | – | too few to say |
+| value | pilot1 | pilot2 | runs differ by | sampling ± | bootstrap ± | gap vs sampling |
+|---|---|---|---|---|---|---|
+| literature | 129 (60%) | 153 (63%) | 3 points | ±20 | ±21 | smaller |
+| music | 3 (1%) | 2 (1%) | 1 points | – | – | too few to say |
+| theatre | 35 (16%) | 38 (16%) | 1 points | ±15 | ±15 | smaller |
+| visual art | 48 (22%) | 44 (18%) | 4 points | ±17 | ±17 | smaller |
+| other | 0 (0%) | 4 (2%) | 2 points | – | – | too few to say |
 
 ### Polarity
 
-| value | pilot1 | pilot2 | runs differ by | sampling ± | gap vs sampling |
-|---|---|---|---|---|---|
-| positive | 156 (73%) | 178 (74%) | 1 points | ±12 | smaller |
-| negative | 59 (27%) | 63 (26%) | 1 points | ±12 | smaller |
+| value | pilot1 | pilot2 | runs differ by | sampling ± | bootstrap ± | gap vs sampling |
+|---|---|---|---|---|---|---|
+| positive | 156 (73%) | 178 (74%) | 1 points | ±12 | ±11 | smaller |
+| negative | 59 (27%) | 63 (26%) | 1 points | ±12 | ±11 | smaller |
 
 ### Criterion
 
-| value | pilot1 | pilot2 | runs differ by | sampling ± | gap vs sampling |
-|---|---|---|---|---|---|
-| aesthetic value | 160 (74%) | 190 (79%) | 4 points | ±10 | smaller |
-| moral value | 8 (4%) | 8 (3%) | 0 points | – | too few to say |
-| usefulness | 31 (14%) | 30 (12%) | 2 points | ±7 | smaller |
-| novelty | 4 (2%) | 4 (2%) | 0 points | – | too few to say |
-| tradition | 12 (6%) | 9 (4%) | 2 points | ±3 | smaller |
+| value | pilot1 | pilot2 | runs differ by | sampling ± | bootstrap ± | gap vs sampling |
+|---|---|---|---|---|---|---|
+| aesthetic value | 160 (74%) | 190 (79%) | 4 points | ±10 | ±10 | smaller |
+| moral value | 8 (4%) | 8 (3%) | 0 points | – | – | too few to say |
+| usefulness | 31 (14%) | 30 (12%) | 2 points | ±7 | ±7 | smaller |
+| novelty | 4 (2%) | 4 (2%) | 0 points | – | – | too few to say |
+| tradition | 12 (6%) | 9 (4%) | 2 points | ±3 | ±3 | smaller |
 
 ### Sarcastic
 
-| value | pilot1 | pilot2 | runs differ by | sampling ± | gap vs sampling |
-|---|---|---|---|---|---|
-| yes | 6 (3%) | 5 (2%) | 1 points | – | too few to say |
-| no | 209 (97%) | 236 (98%) | 1 points | ±3 | smaller |
+| value | pilot1 | pilot2 | runs differ by | sampling ± | bootstrap ± | gap vs sampling |
+|---|---|---|---|---|---|---|
+| yes | 6 (3%) | 5 (2%) | 1 points | – | – | too few to say |
+| no | 209 (97%) | 236 (98%) | 1 points | ±3 | ±3 | smaller |
 
 ### Quoted (someone else's opinion reported)
 
-| value | pilot1 | pilot2 | runs differ by | sampling ± | gap vs sampling |
-|---|---|---|---|---|---|
-| yes | 23 (11%) | 27 (11%) | 1 points | ±8 | smaller |
-| no | 192 (89%) | 214 (89%) | 1 points | ±8 | smaller |
+| value | pilot1 | pilot2 | runs differ by | sampling ± | bootstrap ± | gap vs sampling |
+|---|---|---|---|---|---|---|
+| yes | 23 (11%) | 27 (11%) | 1 points | ±8 | ±8 | smaller |
+| no | 192 (89%) | 214 (89%) | 1 points | ±8 | ±8 | smaller |
 
-### Target named: creator, work title, both, or genre only
+### Target named
 
-| value | pilot1 | pilot2 | runs differ by | sampling ± | gap vs sampling |
-|---|---|---|---|---|---|
-| creator and title | 71 (33%) | 84 (35%) | 2 points | ±12 | smaller |
-| creator only | 84 (39%) | 85 (35%) | 4 points | ±12 | smaller |
-| title only | 26 (12%) | 22 (9%) | 3 points | ±9 | smaller |
-| genre only | 34 (16%) | 50 (21%) | 5 points | ±10 | smaller |
+| value | pilot1 | pilot2 | runs differ by | sampling ± | bootstrap ± | gap vs sampling |
+|---|---|---|---|---|---|---|
+| creator and title | 71 (33%) | 84 (35%) | 2 points | ±12 | ±12 | smaller |
+| creator only | 84 (39%) | 85 (35%) | 4 points | ±12 | ±12 | smaller |
+| title only | 26 (12%) | 22 (9%) | 3 points | ±9 | ±9 | smaller |
+| genre only | 34 (16%) | 50 (21%) | 5 points | ±10 | ±10 | smaller |
 
-### Statement evidence level (after review)
+### Evidence level (after review)
 
-| value | pilot1 | pilot2 | runs differ by | sampling ± | gap vs sampling |
-|---|---|---|---|---|---|
-| observed | 100 (47%) | 118 (49%) | 2 points | ±13 | smaller |
-| inferred | 112 (52%) | 123 (51%) | 1 points | ±13 | smaller |
-| suggested | 3 (1%) | 0 (0%) | 1 points | – | too few to say |
+| value | pilot1 | pilot2 | runs differ by | sampling ± | bootstrap ± | gap vs sampling |
+|---|---|---|---|---|---|---|
+| observed | 100 (47%) | 118 (49%) | 2 points | ±13 | ±13 | smaller |
+| inferred | 112 (52%) | 123 (51%) | 1 points | ±13 | ±13 | smaller |
+| suggested | 3 (1%) | 0 (0%) | 1 points | – | – | too few to say |
 
-### Periodical (share of kept statements)
+### Periodical
 
-| value | pilot1 | pilot2 | runs differ by | sampling ± | gap vs sampling |
-|---|---|---|---|---|---|
-| The Leader | 132 (61%) | 142 (59%) | 2 points | ±25 | smaller |
-| The Monthly Repository | 83 (39%) | 99 (41%) | 2 points | ±25 | smaller |
+| value | pilot1 | pilot2 | runs differ by | sampling ± | bootstrap ± | gap vs sampling |
+|---|---|---|---|---|---|---|
+| The Leader | 132 (61%) | 142 (59%) | 2 points | ±25 | ±24 | smaller |
+| The Monthly Repository | 83 (39%) | 99 (41%) | 2 points | ±25 | ±24 | smaller |
 
 ## 5. Combinations
 
 ### Share of positive judgements, by criterion and by art
 
 Kept statements; *n* is the number of statements in the row.
+
+![Negative and positive kept statements by art and by criterion, per run](figures/05-statistics-pilots/polarity.svg)
 
 | criterion | pilot1 | pilot2 |
 |---|---|---|
@@ -228,6 +242,8 @@ Kept statements per article in each run (deleted ones in brackets). Articles sen
 
 pilot1 vs pilot2: correlation of kept statements per article 0.96; on average an article's count differs by 1.7 statements.
 
+![Kept statements per article, pilot1 against pilot2](figures/05-statistics-pilots/per-article.svg)
+
 ## 8. Do the runs find the same judgements?
 
 Statements of two runs are paired when their evaluative expressions overlap in the same article (see `src/ncse/stats.py`, `match_statements`). A statement without a partner is a judgement that only one run found, or one that the two runs cut differently. All statements are paired, deleted ones included; the reviewer's decisions are compared afterwards.
@@ -252,6 +268,8 @@ The same, separately for articles annotated in parts (D-034) and articles sent w
 | sent in parts in at least one run (12 articles) | 154 (69%) | 21 (9%) | 47 (21%) |
 | sent whole in every run | 55 (77%) | 7 (10%) | 9 (13%) |
 
+![Judgements found by both runs or by only one, pilot1 and pilot2](figures/05-statistics-pilots/matching.svg)
+
 Kept statements (after review):
 
 |  | pilot1 | pilot2 |
@@ -262,6 +280,8 @@ Kept statements (after review):
 | … not found in the other run | 19 (9%) | 48 (20%) |
 
 Agreement on the paired statements. *Same* is the share of pairs with the same value; *kappa* corrects it for the agreement two runs would reach by chance with these proportions (1 = always the same, 0 = no better than chance; above about 0.6 is usually called substantial, below 0.4 weak).
+
+![Agreement between pilot1 and pilot2 on each field of the paired judgements](figures/05-statistics-pilots/agreement.svg)
 
 | field | same | kappa |
 |---|---|---|
@@ -325,12 +345,60 @@ The largest gaps between runs, whatever their sampling uncertainty:
 
 | share | runs differ by | sampling ± |
 |---|---|---|
-| Target named: creator, work title, both, or genre only: genre only | 5 points | ±10 |
+| Target named: genre only | 5 points | ±10 |
 | Criterion: aesthetic value | 4 points | ±10 |
 | Art: visual art | 4 points | ±17 |
-| Target named: creator, work title, both, or genre only: creator only | 4 points | ±12 |
+| Target named: creator only | 4 points | ±12 |
 | Art: literature | 3 points | ±20 |
-| Target named: creator, work title, both, or genre only: title only | 3 points | ±9 |
-| Periodical (share of kept statements): The Leader | 2 points | ±25 |
-| Periodical (share of kept statements): The Monthly Repository | 2 points | ±25 |
+| Target named: title only | 3 points | ±9 |
+| Periodical: The Leader | 2 points | ±25 |
+| Periodical: The Monthly Repository | 2 points | ±25 |
+
+## 10. Checking the sampling intervals by resampling
+
+The *sampling ±* above comes from a formula. As a check, each share was also recomputed on 2,000 random samples of the same articles, drawn with replacement (a *bootstrap*; fixed random seed, so the numbers are the same on every run); the middle 95% of the results gives the *bootstrap ±*. Compared here for every share with at least 10 statements, in each run.
+
+Bootstrap ± divided by formula ±: median 0.98, from 0.94 to 1.07 (37 shares). A value near 1 means the formula is trustworthy at this sample size; well below 1 means the formula is too cautious, well above 1 that it is too confident.
+
+![Sampling intervals: formula against resampling of articles](figures/05-statistics-pilots/intervals.svg)
+
+| share | run | statements | formula ± | bootstrap ± |
+|---|---|---|---|---|
+| Art: literature | pilot1 | 129 | 20.4 | 20.9 |
+| Art: literature | pilot2 | 153 | 20.3 | 20.3 |
+| Art: theatre | pilot1 | 35 | 15.2 | 15.6 |
+| Art: theatre | pilot2 | 38 | 15.0 | 15.4 |
+| Art: visual art | pilot1 | 48 | 18.5 | 17.9 |
+| Art: visual art | pilot2 | 44 | 16.2 | 15.4 |
+| Polarity: positive | pilot1 | 156 | 12.5 | 11.8 |
+| Polarity: positive | pilot2 | 178 | 11.7 | 11.2 |
+| Polarity: negative | pilot1 | 59 | 12.5 | 11.8 |
+| Polarity: negative | pilot2 | 63 | 11.7 | 11.2 |
+| Criterion: aesthetic value | pilot1 | 160 | 9.0 | 9.0 |
+| Criterion: aesthetic value | pilot2 | 190 | 10.2 | 10.0 |
+| Criterion: usefulness | pilot1 | 31 | 6.6 | 6.7 |
+| Criterion: usefulness | pilot2 | 30 | 6.9 | 6.7 |
+| Criterion: tradition | pilot1 | 12 | 2.6 | 2.7 |
+| Sarcastic: no | pilot1 | 209 | 3.1 | 3.0 |
+| Sarcastic: no | pilot2 | 236 | 3.4 | 3.2 |
+| Quoted (someone else's opinion reported): yes | pilot1 | 23 | 8.8 | 8.9 |
+| Quoted (someone else's opinion reported): yes | pilot2 | 27 | 7.9 | 8.0 |
+| Quoted (someone else's opinion reported): no | pilot1 | 192 | 8.8 | 8.9 |
+| Quoted (someone else's opinion reported): no | pilot2 | 214 | 7.9 | 8.0 |
+| Target named: creator and title | pilot1 | 71 | 10.8 | 10.9 |
+| Target named: creator and title | pilot2 | 84 | 13.0 | 13.1 |
+| Target named: creator only | pilot1 | 84 | 13.0 | 13.5 |
+| Target named: creator only | pilot2 | 85 | 10.8 | 11.3 |
+| Target named: title only | pilot1 | 26 | 11.8 | 11.3 |
+| Target named: title only | pilot2 | 22 | 6.4 | 6.2 |
+| Target named: genre only | pilot1 | 34 | 8.2 | 8.0 |
+| Target named: genre only | pilot2 | 50 | 11.2 | 11.6 |
+| Evidence level (after review): observed | pilot1 | 100 | 16.0 | 15.5 |
+| Evidence level (after review): observed | pilot2 | 118 | 10.6 | 10.5 |
+| Evidence level (after review): inferred | pilot1 | 112 | 16.3 | 15.9 |
+| Evidence level (after review): inferred | pilot2 | 123 | 10.6 | 10.5 |
+| Periodical: The Leader | pilot1 | 132 | 24.8 | 23.7 |
+| Periodical: The Leader | pilot2 | 142 | 24.9 | 24.0 |
+| Periodical: The Monthly Repository | pilot1 | 83 | 24.8 | 23.7 |
+| Periodical: The Monthly Repository | pilot2 | 99 | 24.9 | 24.0 |
 
