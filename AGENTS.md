@@ -15,7 +15,7 @@ Technical choices (languages, libraries, file layout, internal formats) are your
 - Keep the project under **git**. Commit in small, meaningful steps with clear messages.
 - Never commit credentials: API keys, passwords, tokens.
 - Do not commit large downloaded source files. The download script and the recorded checksums make them reproducible.
-- Do not commit the full prepared corpus. Publish it as a versioned GitHub release, as described in `README.md` ("Publishing the corpus"). Only the two small samples (raw NCSE sample and corpus sample) are committed, as plain files. Never commit zip archives of data.
+- Do not commit the full prepared corpus. Publish it as a versioned GitHub release, as described in `README.md` ("Publishing the corpus"). Only the two small samples (raw NCSE sample and corpus sample) are committed, as plain files, and, at the project owner's request, the datasets assembled from the two pilot runs (D-038). Never commit zip archives of data.
 - Never replace or modify a published corpus release. Corrections become a new version.
 - Keep both ways of obtaining the corpus working: building it from NCSE and fetching the published release. A change to stages 1–3 that would change the corpus means a new corpus version.
 - Prompts are part of the code: keep them as separate, versioned files, not hidden inside scripts.

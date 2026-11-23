@@ -1,0 +1,5 @@
+run_id,step,model,prompt_version,prompt_sha256,settings,started,finished,requests,prompt_tokens,completion_tokens,used_in_dataset
+analyst-20261122-225928,analyst,jlu/qwen3.8-27b-fast,v1,2c35cb8b8a00,"{""max_tokens"": 32000, ""response_format"": {""type"": ""json_object""}, ""temperature"": 0}",2026-11-22T22:59:28,2026-11-22T23:16:27,25,147029,337297,yes
+reviewer-20261122-231628,reviewer,jlu/qwen3.8-27b-fast,v1,96ecaa7b3555,"{""max_tokens"": 32000, ""response_format"": {""type"": ""json_object""}, ""temperature"": 0}",2026-11-22T23:16:28,2026-11-22T23:21:30,21,165531,103944,no
+reviewer-20261123-085230,reviewer,jlu/qwen3.8-27b-fast,v2,0f831b21ba4c,"{""max_tokens"": 32000, ""response_format"": {""type"": ""json_object""}, ""temperature"": 0}",2026-11-23T08:52:30,2026-11-23T08:59:40,21,180630,135339,no
+reviewer-20261123-092958,reviewer,jlu/qwen3.8-27b-fast,v2,62ec31b5e663,"{""max_tokens"": 32000, ""response_format"": {""type"": ""json_object""}, ""temperature"": 0}",2026-11-23T09:29:58,2026-11-23T09:37:16,21,187875,138449,yes

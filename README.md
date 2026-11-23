@@ -163,7 +163,7 @@ export LITELLM_API_KEY=<your key>
   uv run ncse stats --datasets data/dataset/pilot-20261122 data/dataset/pilot-20261123 --labels pilot1 pilot2 --name pilots
   ```
 
-  This writes `reports/05-statistics-pilots.md`: every number for each run, the gap between the runs next to the uncertainty that comes from the sample of articles (checked by resampling the articles), and how many individual judgements the runs share. The charts are SVG files in `reports/figures/05-statistics-pilots/`, shown in the report when it is opened on GitHub or GitLab (D-037).
+  The two pilot datasets are committed (`data/dataset/pilot-20261122/`, `data/dataset/pilot-20261123/`; D-038), so the last command works right after cloning, without the LLM service. It writes `reports/05-statistics-pilots.md`: every number for each run, the gap between the runs next to the uncertainty that comes from the sample of articles (checked by resampling the articles), and how many individual judgements the runs share. The charts are SVG files in `reports/figures/05-statistics-pilots/`, shown in the report when it is opened on GitHub or GitLab (D-037).
 
 ## Building the corpus or fetching the published one
 

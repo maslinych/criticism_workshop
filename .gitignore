@@ -1,5 +1,10 @@
 # Downloaded and generated data (reproducible from scripts; see README)
-data/
+data/*
+# ...except the datasets assembled from the two pilot runs (small; D-038)
+!data/dataset/
+data/dataset/*
+!data/dataset/pilot-20261122/
+!data/dataset/pilot-20261123/
 logs/
 dist/
 # Credentials

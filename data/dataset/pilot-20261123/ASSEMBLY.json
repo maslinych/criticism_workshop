@@ -1,0 +1,20 @@
+{
+ "assembled_at": "2026-11-23T14:13:53",
+ "code_commit": "6c2f44249287b532ec1e6d7b7aa4de92819f77cf",
+ "annotation_folder": "data/annotation/sample",
+ "corpus": "corpus_sample",
+ "articles": 24,
+ "articles_in_dataset": 24,
+ "article_status": {
+  "analyst accepted, reviewer accepted": 24
+ },
+ "statements": 296,
+ "statements_deleted": 25,
+ "failed_items": 2,
+ "sha256": {
+  "statements.csv": "542c69d00a4a5973c2e9cab847aac17d01714c8906bf8ed9a0f157cf4179021c",
+  "articles.csv": "898af319a0dc9464a6f1d359103df1ea6d4c23c2c06a6b1f7b4f23966ac288ab",
+  "failed_items.csv": "16d30c87dfd386d78ee8baed218b852ee0e72f46a8985d0d67bc189cb8fe09a8",
+  "runs.csv": "d69e6569754d5e260291d28e77a21218d3dfba9ab6f372a36aaff63b5a026f10"
+ }
+}

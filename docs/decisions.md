@@ -284,6 +284,12 @@ Decision:
 Reason: a report meant to be read by humanists on the web is easier to grasp with pictures; SVG in Markdown needs no hosting. The bootstrap tests whether the formula, which assumes a reasonably large sample, can be trusted on 23 articles.
 Consequences: `src/ncse/figures.py`; `stats.py` builds the chart data; tests in `tests/test_dataset.py` (charts written, shown in the report, identical when redrawn; bootstrap close to the formula on regular data). On the two pilots the bootstrap intervals are 0.98 times the formula's (median; range 0.94–1.07 over 37 shares), so the formula holds at this sample size. The intervals of groups with very few articles (e.g. the 1820s, 2 articles) are not reliable by either method.
 
+**D-038 — The datasets of the two pilot runs are committed**
+Date: 2026-11-23. Status: adopted (project owner). An exception to AGENTS.md, rule 2, which otherwise allows only the two samples to be committed.
+Decision: the assembled tables of the two pilots, `data/dataset/pilot-20261122/` (analyst v1, reviewer v2 amended) and `data/dataset/pilot-20261123/` (analyst v2 with parts, same reviewer), are committed as plain files (about 600 KB together). `.gitignore` still ignores everything else under `data/`, including the annotation records with the raw answers they were built from, and any later dataset. Before committing they were assembled again with the committed code (commit 6c2f442, recorded in their `ASSEMBLY.json`); the tables were identical to the earlier assembly, only the time and commit changed.
+Reason: they let anyone who clones the repository read the pilot results, run `uv run ncse stats` on them and repeat the comparison of runs without access to the LLM service. They are small and contain only text from the CC BY corpus, the model's annotations and run information, no credentials.
+Consequences: `tests/test_dataset.py` checks their integrity in every clone (checksums in `ASSEMBLY.json`, identifiers, allowed values, quotations as exact slices of `corpus_sample/`). Reassembling them changes `ASSEMBLY.json`; the records they come from stay outside git, so a fresh clone cannot reassemble them.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.

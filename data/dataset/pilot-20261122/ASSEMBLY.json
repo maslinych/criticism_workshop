@@ -1,0 +1,21 @@
+{
+ "assembled_at": "2026-11-23T14:13:53",
+ "code_commit": "6c2f44249287b532ec1e6d7b7aa4de92819f77cf",
+ "annotation_folder": "data/annotation/sample-before-20261123-101544",
+ "corpus": "corpus_sample",
+ "articles": 24,
+ "articles_in_dataset": 23,
+ "article_status": {
+  "analyst accepted, reviewer accepted": 23,
+  "analyst failed, reviewer not processed": 1
+ },
+ "statements": 237,
+ "statements_deleted": 22,
+ "failed_items": 1,
+ "sha256": {
+  "statements.csv": "cae3d4bba70a1bfe0b37946fd7f9f3caba5d359de8e972c08096fa315cae2ac9",
+  "articles.csv": "1c53124abe54275c11887958cf16814dd31714b0b5c06549395c6416ab1624bd",
+  "failed_items.csv": "500a94c100366b5291a9999d177cb942fbbb7d2e3e07391dd67c16e169fb7d5d",
+  "runs.csv": "ad27520b1ea02be00bc7190c5188b13ad5e8f2917272f445b30dc04747db84d3"
+ }
+}
