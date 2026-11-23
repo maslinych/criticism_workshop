@@ -76,7 +76,7 @@ Every response from the LLM is checked by code before it is accepted.
 **When a check fails** (D-023):
 
 1. Log the failure.
-2. If the response as a whole is unusable (empty, not JSON, wrong structure, cut off at the length limit), retry the request a limited number of times. If the model returns exactly the same response again, stop retrying. Do not send a long cut-off response back with the retry; its beginning is enough.
+2. If the response as a whole is unusable (empty, not JSON, wrong structure, cut off at the length limit), retry the request a limited number of times. If the model returns exactly the same response again, stop retrying. An empty response does not count as a repeat: it comes from a reasoning model whose reasoning ran in a loop until it stopped, which happens at random, so a retry is worthwhile. Do not send a long cut-off response back with the retry; its beginning is enough.
 3. A single passage or statement that fails a check does not make the whole response fail: set it aside with its reasons, keep and report it, and accept the rest. The reviewer's response is the exception: any action outside its limits rejects it as a whole.
 4. If the response still fails after the last retry, mark the article as failed and report it.
 
