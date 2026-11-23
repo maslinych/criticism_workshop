@@ -175,6 +175,22 @@ Decision:
 Reason: see `docs/llm-service.md`. In short: without the JSON setting, models wrote text before the JSON; an output limit of 8,000 tokens was too small for both answer and reasoning; turning reasoning off cost recall; the service gives up on an answer after about 300 seconds, and retrying such requests wasted half an hour; Ctrl-C did not stop a run whose requests ran in the background.
 Consequences: the model choice itself is left to the smoke test and the pilot; `docs/llm-service.md` says what to look for.
 
+**D-025 — Variation between runs is estimated, not eliminated**
+Date: 2026-11-23. Status: adopted as a principle (project owner); how to estimate it is still to be designed and tested.
+Decision:
+- **Answers vary between runs.** The same request, sent again unchanged, gives a different answer. On a shared LLM service this happens even with `temperature: 0` and a fixed `seed`, so repeatable answers cannot be assumed. Both steps vary: the analyst in which statements it finds and in the values it gives them, the reviewer in which statements it deletes or downgrades.
+- **The variation is treated as a property of the method, not as a defect to remove.** It resembles the variation between human annotators who read the same text: clear cases come out the same almost every time, borderline cases do not. The methodologically sound response is to **measure** it and report it with the data, not to hide it behind a single run.
+- **Uncertainty propagates through both steps.** The reviewer's variation adds to the analyst's, so an estimate must cover both: several analyst runs on the same articles, and several reviewer runs on each analyst run. A single run of each step is one draw from the possible results.
+- **What the design must allow,** even before such runs are made:
+  - several independent runs of a step on the same article, kept side by side, each identified by its run, never overwriting one another;
+  - the reviewer run on a given analyst run, recorded as such;
+  - a rule, carried out by code, for recognising the same statement in different analyst runs (identifiers differ between runs, and so does the exact wording the model picks out; the position of the quotation and the evaluative expression in the text is a natural basis);
+  - statistics that can report, besides counts and shares, their spread across runs, and for each statement or reviewer action how many runs agree on it.
+- **Combining runs** (for example keeping only what most runs agree on) is a possible later choice, but the data of every run must stay available, so that the agreement itself can be studied.
+- **Comparing prompt versions or models.** A difference between two single runs is not evidence that a change worked: it may be run-to-run variation. Judge a change against the variation of repeated runs.
+Reason: repeated requests in the pilot phase never gave identical answers. Plain evaluations were found by almost every run; milder and indirect ones, the choice of criterion, and the reviewer's decisions on borderline statements varied from run to run.
+Consequences: `docs/evidence-and-review.md` (section 8) and `AGENTS.md` (sections 4 and 7) state the principle; `docs/llm-service.md` corrects the advice on `temperature`. A first full run may be a single run of each step, documented as such; the estimate of variation is planned as a separate step.
+
 ## Open questions for the project owner
 
 These should be settled during or after the pilot, then recorded as decisions.

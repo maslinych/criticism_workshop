@@ -38,6 +38,7 @@ Technical choices (languages, libraries, file layout, internal formats) are your
   - every article in the prepared corpus: its source file and the identifiers of the NCSE entries it was built from, recorded in `metadata.csv`;
   - every annotation: the corpus version, the article, the exact passage, the model, the model settings, the prompt version and the date of the run;
   - the raw LLM responses: kept, so that any processed result can be checked against what the model actually returned.
+- **Repeated runs, not repeatable answers.** An LLM does not give the same answer twice, even at temperature 0 (D-025). Do not try to hide this. Build the stages so that a step can be run several times on the same articles, each run identified and kept, never overwriting another, and the reviewer can be run on a given analyst run. The variation between runs is then measured and reported (`docs/evidence-and-review.md`, section 8).
 
 ## 5. What the LLM does and what code does
 
@@ -88,6 +89,7 @@ Never fix an LLM output by hand. Never drop a failed item silently.
   - for the integrity of the generated data: unique identifiers, exactly one text file for every row of `metadata.csv` and the reverse, every statement linked to an existing article, only allowed values in controlled fields, no empty required fields.
 - **Logging.** Every run writes a log of what it did: items processed, skipped, failed and retried, plus the number of requests and tokens used.
 - **Statistics after each stage.** Report how many texts were selected, how many statements were produced, how many failed checks, and how many were deleted or downgraded by the reviewer. Unexpected numbers are often the first sign of a problem.
+- **Variation between runs** (D-025). Say how many runs of each step the data rests on. Where there are several, report how far they agree. When comparing prompt versions or models, do not read a difference between two single runs as an effect of the change.
 
 ## 8. Cost and access
 
@@ -147,6 +149,7 @@ Give a request and token cost estimate before the full run.
 - A cheap *sample mode* runs every stage on `corpus_sample/`.
 - The prepared corpus is the only input; quotations are matched against its text files.
 - Requests ask for JSON through the interface (`response_format`), with a generous output limit; gateway errors after a long wait are not retried; Ctrl-C must stop a run (D-024, `docs/llm-service.md`).
+- Answers vary between runs even at temperature 0. Each step must be able to run several times on the same articles, keeping every run, and the reviewer must be able to run on a given analyst run, so that the variation of both steps can be estimated (D-025).
 
 **What the validators must enforce** (from `docs/annotation-guidelines.md` and `docs/evidence-and-review.md`)
 

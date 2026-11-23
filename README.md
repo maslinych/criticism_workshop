@@ -243,8 +243,9 @@ A DOI (e.g. by depositing the same zip on Zenodo) is optional.
   - statements per periodical and per decade;
   - statements by art, polarity, criterion and evidence level;
   - share of sarcastic and quoted evaluations;
-  - reviewer deletions and downgrades.
-- **Run documentation.** Which model, settings and prompt versions produced the data.
+  - reviewer deletions and downgrades;
+  - where several runs were made, how far they agree, and the spread of each figure across runs (D-025).
+- **Run documentation.** Which model, settings and prompt versions produced the data, and how many runs of each step.
 
 CSV (UTF-8) is the readable format for inspection and analysis. Internal working formats are up to the implementer.
 
@@ -255,6 +256,7 @@ Annotation runs through the university's **LiteLLM** service, which offers an Op
 - Access credentials are read from the environment and are never written into code or committed to version control.
 - The model name, settings and prompt version are recorded for every annotation.
 - Before the full run, the expected number of requests and tokens is estimated and reported to the project owner.
+- The same request does not always get the same answer, even with settings meant to make the model repeat itself. Like the variation between human annotators, this is measured rather than hidden: each step can be run several times, and the data says how many runs it rests on and how far they agree (D-025, `docs/evidence-and-review.md`, section 8).
 - Models are chosen by trying them on a few sample articles before the pilot. `docs/llm-service.md` describes what a test round with this service showed: which kinds of model could do the task, how long answers take, the service's time limit for one answer, and how to request JSON and handle errors (D-024).
 
 ## Development sequence and approval points

@@ -19,7 +19,7 @@ Update this file at the end of every work session: what was done, what is next, 
 
 ## Next steps
 
-- Stage 5: draft analyst and reviewer prompts and the output format (✋2). Before that, read `docs/llm-service.md` and decisions D-022 to D-024: they record what a test round of the annotation stages showed and how answers are to be checked.
+- Stage 5: draft analyst and reviewer prompts and the output format (✋2). Before that, read `docs/llm-service.md` and decisions D-022 to D-025: they record what a test round of the annotation stages showed and how answers are to be checked.
 
 ## Problems and observations
 
@@ -30,3 +30,4 @@ Update this file at the end of every work session: what was done, what is next, 
 - 2026-11-22 (second session): owner's answers recorded as D-016 to D-018. No balancing of the two periodicals in the pilot or statistics.
 - The *Monthly Repository* gives about 0.5 million words, *The Leader* about 3 million.
 - 2026-11-22: a trial version of the annotation stages was tested against the LiteLLM service with several models. Lessons in `docs/llm-service.md`; decisions D-022 (three levels of quotation matching, answers Q-5), D-023 (set aside failed statements instead of rejecting whole answers), D-024 (JSON through the interface, generous output limit, reasoning on, error handling, Ctrl-C).
+- 2026-11-23: repeated runs of the annotation steps showed that the same request gets different answers, even at temperature 0 and with a fixed seed. Decision D-025: the variation is estimated, not eliminated; both steps must support several runs on the same articles, so that it can be measured later.

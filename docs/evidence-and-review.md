@@ -79,3 +79,18 @@ A claim that fails one of these criteria is **downgraded** to `suggested`, or **
 | a reader's understanding in context | `observed` + `inferred` |
 | to study the model's own expectations | `suggested` claims and their assumptions |
 | to study the review step | deleted and downgraded claims with their reasons |
+| only judgements that do not depend on chance | statements on which repeated runs agree (when the data includes several runs; section 8) |
+
+## 8. Variation between runs
+
+Evidence levels say **how directly the text supports** a claim. They do not say **how reproducible** the claim is. These are different questions.
+
+A language model asked the same question twice does not always give the same answer, even with settings meant to make it repeat itself. Both steps vary: the analyst finds slightly different statements and sometimes chooses a different value (a criterion, for example), and the reviewer deletes or downgrades different borderline statements. Clear cases come out the same almost every time; borderline ones do not.
+
+This is not unlike the variation between human annotators reading the same text, and it is handled the same way: **it is measured, not hidden.**
+
+- Run each step several times on the same texts, and keep every run.
+- Run the reviewer on each analyst run, so that the variation of both steps is carried through to the result.
+- Report, for each statement and each reviewer action, how many runs agree on it, and for each summary figure its spread across runs.
+
+How many runs are needed, and on how many texts, is a practical choice: even a sample of texts run several times shows how far single-run figures can be trusted. Whatever is done, the data should say how many runs it rests on.
