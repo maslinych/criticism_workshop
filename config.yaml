@@ -127,7 +127,7 @@ annotation:
     reasoning_effort: null
     extra: {}
   reviewer:
-    prompt_version: v1
+    prompt_version: v2   # stricter (D-033); v1 used in the pilot of 2026-11-22
     model: jlu/qwen3.8-27b-fast   # provisional, same as the analyst (D-032); may differ (evidence-and-review.md, 5)
     temperature: 0
     max_tokens: 32000    # reasoning models count their thinking in this limit
