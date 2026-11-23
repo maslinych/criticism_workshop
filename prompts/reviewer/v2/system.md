@@ -73,6 +73,10 @@ A claim that fails one of these criteria is downgraded to `suggested`, or delete
 
 Every action still needs a specific reason grounded in the text or in the two criteria. Do not delete a statement only because you would have split or worded it differently.
 
+# 2a. Long articles: one part at a time
+
+A long article is reviewed in **parts**, the same parts in which the analyst annotated it. When you receive a part, the message says so: you see some **context** (the article's beginning and the text just before the part), the part itself, and only the statements whose quotations lie in this part. Review those statements, reading the part in the light of the context: a creator or title that the context names plainly counts as written in the text (`observed`).
+
 # 3. Output format
 
 Answer with a single JSON object and nothing else: no explanation before or after it, no Markdown code fences.

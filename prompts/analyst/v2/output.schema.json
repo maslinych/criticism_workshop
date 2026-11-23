@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "analyst-output-v1",
+  "title": "Analyst response, prompt version v1",
+  "description": "What the analyst LLM must return for one article. The schema checks the structure and the allowed values. Further rules (verbatim quotations, assumptions required for inferred and suggested claims, at least one target field) are checked by code; see docs/output-format.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["passages"],
+  "properties": {
+    "passages": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/passage"}
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "string",
+      "enum": ["observed", "inferred", "suggested"]
+    },
+    "assumption": {
+      "type": ["string", "null"]
+    },
+    "free_claim": {
+      "description": "A claim whose value is free text written as in the source (a name, a title, a genre).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "evidence", "assumption"],
+      "properties": {
+        "value": {"type": "string", "minLength": 1},
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "assumption": {"$ref": "#/$defs/assumption"}
+      }
+    },
+    "art_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "evidence", "assumption"],
+      "properties": {
+        "value": {"type": "string", "enum": ["literature", "music", "theatre", "visual art", "other"]},
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "assumption": {"$ref": "#/$defs/assumption"}
+      }
+    },
+    "polarity_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "evidence", "assumption"],
+      "properties": {
+        "value": {"type": "string", "enum": ["positive", "negative"]},
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "assumption": {"$ref": "#/$defs/assumption"}
+      }
+    },
+    "sarcastic_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "evidence", "assumption"],
+      "properties": {
+        "value": {"type": "string", "enum": ["yes", "no"]},
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "assumption": {"$ref": "#/$defs/assumption"}
+      }
+    },
+    "criterion_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "evidence", "assumption"],
+      "properties": {
+        "value": {"type": "string", "enum": ["aesthetic value", "moral value", "usefulness", "novelty", "tradition"]},
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "assumption": {"$ref": "#/$defs/assumption"}
+      }
+    },
+    "optional_free_claim": {
+      "anyOf": [{"$ref": "#/$defs/free_claim"}, {"type": "null"}]
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluative_expression", "creator", "art", "work_title", "work_genre",
+        "polarity", "sarcastic", "criterion", "quoted_source", "note"
+      ],
+      "properties": {
+        "evaluative_expression": {"type": "string", "minLength": 1},
+        "creator": {"$ref": "#/$defs/optional_free_claim"},
+        "art": {"$ref": "#/$defs/art_claim"},
+        "work_title": {"$ref": "#/$defs/optional_free_claim"},
+        "work_genre": {"$ref": "#/$defs/optional_free_claim"},
+        "polarity": {"$ref": "#/$defs/polarity_claim"},
+        "sarcastic": {"$ref": "#/$defs/sarcastic_claim"},
+        "criterion": {"$ref": "#/$defs/criterion_claim"},
+        "quoted_source": {"$ref": "#/$defs/optional_free_claim"},
+        "note": {"type": ["string", "null"]}
+      }
+    },
+    "passage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quote", "statements"],
+      "properties": {
+        "quote": {"type": "string", "minLength": 1},
+        "statements": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/statement"}
+        }
+      }
+    }
+  }
+}

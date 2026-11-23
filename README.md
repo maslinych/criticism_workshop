@@ -131,7 +131,7 @@ export LITELLM_API_KEY=<your key>
 |---|---|---|
 | Models | `uv run ncse models` | lists the model names the service offers, to put into `config.yaml` |
 | Estimate | `uv run ncse estimate` | prints the expected number of requests and tokens; no requests |
-| 4. Analyst | `uv run ncse analyse` | sends each article to the analyst; every answer is checked at once and retried if unusable as a whole; passages and statements that fail a check are set aside; `data/annotation/full/analyst/<article>.json` |
+| 4. Analyst | `uv run ncse analyse` | sends each article to the analyst (a long article in parts, joined afterwards; D-034); every answer is checked at once and retried if unusable as a whole; passages and statements that fail a check are set aside; `data/annotation/full/analyst/<article>.json` |
 | 5. Check | `uv run ncse check analyst` | checks all stored analyst answers again, no requests; `reports/03-analyst-checks.md` |
 | 6. Reviewer | `uv run ncse review` | sends each analysed article to the reviewer, checked the same way; `data/annotation/full/reviewer/<article>.json` |
 | 7. Check again | `uv run ncse check reviewer` | checks all reviewer answers again, no requests; `reports/04-review-checks.md` |

@@ -12,6 +12,7 @@ measured there are used to extrapolate; otherwise only the input is estimated.
 
 import json
 
+from . import parts
 from .annotate import corpus_folder, load_articles, output_folder, read_text
 from .prompts import load_prompt
 
@@ -45,13 +46,24 @@ def run(cfg: dict, sample: bool = False) -> None:
     ann = cfg["annotation"]
     analyst = load_prompt("analyst", ann["analyst"]["prompt_version"])
     reviewer = load_prompt("reviewer", ann["reviewer"]["prompt_version"])
-    text_chars = sum(len(read_text(folder, a)) for a in articles)
+    texts = [read_text(folder, a) for a in articles]
+    text_chars = sum(len(t) for t in texts)
     n = len(articles)
-    # Each request carries the instructions, the user message frame and the article.
+    # Long articles are sent in parts, each with some context (D-034).
+    limit = ann.get("max_part_chars")
+    opening, before = ann.get("context_opening_chars", 1500), ann.get("context_before_chars", 1500)
+    spans = [parts.split(t, limit) if limit else [(0, len(t))] for t in texts]
+    requests = sum(len(s) for s in spans)
+    context_chars = sum(len(parts.context(t, start, opening, before)) for t, s in zip(texts, spans) for start, _ in s)
+    # Each request carries the instructions, the user message frame and the article or part.
     frame = len(analyst.system) + len(analyst.user_template)
-    analyst_in = (n * frame + text_chars) / CHARS_PER_TOKEN
+    analyst_in = (requests * frame + text_chars + context_chars) / CHARS_PER_TOKEN
     print(f"Corpus: {folder} — {n:,} articles, {text_chars:,} characters of text")
-    print(f"Analyst, first attempts only: {n:,} requests, about {analyst_in / 1e6:.2f} million input tokens "
+    if requests > n:
+        print(f"Long articles in parts (max_part_chars {limit:,}): {sum(len(s) > 1 for s in spans):,} articles "
+              f"in {sum(len(s) for s in spans if len(s) > 1):,} parts, with {context_chars / CHARS_PER_TOKEN:,.0f} "
+              "tokens of context in all")
+    print(f"Analyst, first attempts only: {requests:,} requests, about {analyst_in / 1e6:.2f} million input tokens "
           f"({frame / CHARS_PER_TOKEN:,.0f} of them per request are the instructions)")
     m = measured(cfg, "analyst")
     if m:

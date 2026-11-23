@@ -17,17 +17,36 @@ any record does not pass, so that it can be used before assembling the data.
 
 from collections import Counter
 
-from . import checks
-from .annotate import (corpus_folder, error_kind, load_articles, load_record, output_folder,
+from . import checks, parts
+from .annotate import (corpus_folder, error_kind, join_records, load_articles, load_record, output_folder,
                        read_text, result_sha256)
 from .prompts import load_prompt
 from .quotes import Tolerance
 from .runlog import RunLog
 
 
-def recheck(record: dict, text: str, analyst_result: dict | None) -> list[str]:
-    """Problems found when re-checking one record; empty if it is sound."""
+def recheck(record: dict, text: str, analyst_result: dict | None,
+            part_records: list[dict | None] | None = None) -> list[str]:
+    """Problems found when re-checking one record; empty if it is sound.
+
+    The record of a long article sent in parts (D-034) is sound if every part's
+    record is, and joining them again gives exactly the stored record."""
+    if "parts" in record:
+        if not part_records or any(r is None for r in part_records):
+            return ["the record of one of its parts is missing"]
+        problems = []
+        for r in part_records:
+            number = r["part"]["number"]
+            sub = parts.part_of_analyst(analyst_result, number) if analyst_result is not None else None
+            problems += [f"part {number}: {p}" for p in recheck(r, text, sub)]
+        rebuilt = join_records(record["step"], part_records,
+                               {"result": analyst_result} if analyst_result is not None else None)
+        if (rebuilt["status"] != record["status"] or rebuilt["flags"] != record["flags"]
+                or result_sha256(rebuilt["result"] or {}) != result_sha256(record["result"] or {})):
+            problems.append("stored result is not what joining its parts gives")
+        return problems
     problems = []
+    span = (record["part"]["start"], record["part"]["end"]) if "part" in record else None
     if record["status"] == "accepted":
         if record["step"] == "reviewer" and record.get("sent") is False:
             expected = checks.apply_review(analyst_result, [])
@@ -39,7 +58,7 @@ def recheck(record: dict, text: str, analyst_result: dict | None) -> list[str]:
         if record["step"] == "analyst":
             # the tolerance the answer was checked with is stored in the result (D-028)
             tolerance = Tolerance.from_config((record["result"] or {}).get("quote_tolerance"))
-            result = checks.check_analyst(attempt["raw_response"], text, schema, tolerance)
+            result = checks.check_analyst(attempt["raw_response"], text, schema, tolerance, span)
         else:
             result = checks.check_review(attempt["raw_response"], analyst_result, schema)
         if not result.ok:
@@ -77,7 +96,7 @@ def run(cfg: dict, step: str, sample: bool = False) -> None:
     st_level, actions, deleted_reasons = Counter(), Counter(), Counter()
     failed_articles = []
     item_failures, quote_match, failed_items = Counter(), Counter(), []
-    n_statements = n_passages = n_deleted = 0
+    n_statements = n_passages = n_deleted = n_split = 0
 
     for art in articles:
         aid = art["article_id"]
@@ -97,7 +116,11 @@ def run(cfg: dict, step: str, sample: bool = False) -> None:
             if record.get("analyst_sha256") != result_sha256(analyst_result):
                 problems.append((aid, "review belongs to an older analyst answer"))
                 continue
-        for p in recheck(record, read_text(corpus, art), analyst_result):
+        part_records = ([load_record(out / "parts", p["record"]) for p in record["parts"]]
+                        if "parts" in record else None)
+        if part_records:
+            n_split += 1
+        for p in recheck(record, read_text(corpus, art), analyst_result, part_records):
             problems.append((aid, p))
         for a in record["attempts"]:
             for e in a.get("errors", []):
@@ -149,6 +172,7 @@ def run(cfg: dict, step: str, sample: bool = False) -> None:
              "| Articles | Number |", "|---|---|",
              *[f"| {k} | {v} |" for k, v in sorted(status.items())],
              f"| **total in corpus** | {n_articles} |", "",
+             f"Long articles sent in parts (D-034): {n_split}.", "",
              f"**Re-check:** {len(problems)} problem(s)." + ("" if not problems else " Listed below."), ""]
     if problems:
         lines += [f"- `{aid}`: {p}" for aid, p in problems] + [""]

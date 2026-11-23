@@ -20,6 +20,16 @@ are set aside as failed items, with their reasons, and the rest is kept (D-027).
 An article whose answer is accepted, or that has used up its attempts (failed),
 is done: running the stage again skips it. `--retry-failed` gives failed
 articles a new round of attempts; earlier attempts are kept.
+
+A long article (over `annotation.max_part_chars` characters) is sent in parts,
+one request per part, with the article's beginning and the text before the part
+as context (parts.py, D-034). Each part has its own record, in
+<step>/parts/<article_id>.part<k>of<n>.json, with its own attempts; when all
+parts are done, their results are joined into the article's record, which then
+looks like that of an article sent whole (positions and numbers over the whole
+article), plus the list of parts and a summary of their attempts. The reviewer
+reviews the same parts as the analyst. Resuming or `--retry-failed` sends only
+the parts that are not yet accepted.
 """
 
 import csv
@@ -30,9 +40,10 @@ import os
 import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
-from . import checks
+from . import checks, parts
 from .llm import LLMClient, LLMError, SlowAnswer
 from .prompts import load_prompt
 from .quotes import Tolerance
@@ -89,7 +100,7 @@ def load_record(folder: Path, article_id: str) -> dict | None:
 def save_record(folder: Path, record: dict) -> None:
     """Write via a temporary file, so an interruption never leaves half a record."""
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{record['article_id']}.json"
+    path = folder / f"{record.get('record_name') or record['article_id']}.json"
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     tmp.replace(path)
@@ -101,6 +112,51 @@ def result_sha256(result: dict) -> str:
 
 def now() -> str:
     return dt.datetime.now().isoformat(timespec="seconds")
+
+
+# ---------------------------------------------------------------- units
+
+
+@dataclass
+class Unit:
+    """What one request is about: a whole article, or one part of a long one (D-034)."""
+
+    art: dict
+    number: int | None = None  # part number, from 1; None for a whole article
+    count: int = 1             # number of parts of the article
+    start: int = 0             # the part's position in the article text
+    end: int | None = None
+
+    @property
+    def aid(self) -> str:
+        return self.art["article_id"]
+
+    @property
+    def is_part(self) -> bool:
+        return self.number is not None
+
+    @property
+    def name(self) -> str:
+        return parts.part_name(self.aid, self.number, self.count) if self.is_part else self.aid
+
+    @property
+    def span(self) -> tuple[int, int] | None:
+        return (self.start, self.end) if self.is_part else None
+
+
+def accepted_actions(record: dict) -> list[dict]:
+    """The reviewer actions of an accepted reviewer record (of an article or a part)."""
+    if record.get("sent") is False:
+        return []
+    return json.loads(record["attempts"][record["accepted_attempt"] - 1]["raw_response"])["actions"]
+
+
+def attempt_summary(attempt: dict, number: int) -> dict:
+    """What an article's joined record keeps of one attempt for one of its parts;
+    the full attempt stays in the part's record."""
+    keep = ("attempt", "run_id", "prompt_version", "prompt_sha256", "model_requested", "requested_at",
+            "answered_at", "finish_reason", "usage", "errors", "accepted")
+    return {"part": number, **{k: attempt[k] for k in keep if k in attempt}}
 
 
 # ---------------------------------------------------------------- one step
@@ -150,6 +206,9 @@ class StepRunner:
         self.max_attempts = 1 + ann["max_retries"]
         self.echo_chars = ann["retry_echo_chars"]
         self.tolerance = Tolerance.from_config(cfg.get("quotes"))
+        self.max_part_chars = ann.get("max_part_chars")  # None: never split (D-034)
+        self.context_chars = (ann.get("context_opening_chars", 1500), ann.get("context_before_chars", 1500))
+        self.join_lock = threading.Lock()
         self.prompt = load_prompt(step, self.settings_cfg["prompt_version"])
         self.corpus = corpus_folder(cfg, sample)
         self.version = corpus_version(cfg, sample)
@@ -176,12 +235,14 @@ class StepRunner:
 
     # -- which articles to send
 
-    def todo(self, articles: list[dict], retry_failed: bool) -> list[tuple[dict, dict | None]]:
-        """Articles still to be processed, with their existing record (if any)."""
+    def todo(self, articles: list[dict], retry_failed: bool) -> list[list[tuple[Unit, dict | None]]]:
+        """For each article still to be processed, its units (the whole article,
+        or the parts not yet accepted) with their existing records (if any)."""
         out = []
         for art in articles:
             aid = art["article_id"]
             record = load_record(self.out, aid)
+            analyst = None
             if self.step == "reviewer":
                 analyst = load_record(self.analyst_out, aid)
                 if analyst is None or analyst["status"] != "accepted":
@@ -197,49 +258,111 @@ class StepRunner:
             if record and record["status"] == "failed" and not retry_failed:
                 self.count("skipped (failed earlier; use --retry-failed)")
                 continue
-            out.append((art, record))
+            spans = self.spans(art, analyst)
+            if len(spans) == 1:
+                out.append([(Unit(art), record)])
+                continue
+            units, stale = [], False
+            for k, (start, end) in enumerate(spans, start=1):
+                unit = Unit(art, k, len(spans), start, end)
+                rec = load_record(self.out / "parts", unit.name)
+                if rec and (rec["part"]["start"], rec["part"]["end"]) != (start, end):
+                    raise SystemExit(f"{unit.name}: the stored part has other limits than the split now gives "
+                                     "(was annotation.max_part_chars changed?); move the old records away first")
+                if rec and analyst and rec.get("analyst_sha256") != result_sha256(analyst["result"]):
+                    stale = True
+                if rec and rec["status"] == "accepted":
+                    continue
+                if rec and rec["status"] == "failed" and not retry_failed:
+                    continue
+                units.append((unit, rec))
+            if stale:
+                self.count("skipped (review belongs to an older analyst answer)")
+                self.info(f"{aid}: some parts were reviewed for a different analyst answer; not changed")
+                continue
+            if units:
+                out.append(units)
+            else:  # every part is done, but the run stopped before they were joined
+                self.join(Unit(art, 1, len(spans)))
         return out
+
+    def spans(self, art: dict, analyst: dict | None) -> list[tuple[int, int]]:
+        """The parts of an article: the analyst splits by length; the reviewer
+        uses the parts the analyst's answer was made from."""
+        if self.step == "reviewer":
+            found = analyst["result"].get("parts")
+            return [(p["start"], p["end"]) for p in found] if found else [(0, None)]
+        if not self.max_part_chars:
+            return [(0, None)]
+        return parts.split(read_text(self.corpus, art), self.max_part_chars)
 
     # -- one article
 
-    def new_record(self, aid: str) -> dict:
-        record = {"article_id": aid, "step": self.step, "status": "in_progress",
+    def new_record(self, unit: Unit) -> dict:
+        record = {"article_id": unit.aid, "step": self.step, "status": "in_progress",
                   "corpus_version": self.version, "attempts": [], "result": None,
                   "flags": [], "errors": [], "run_ids": []}
+        if unit.is_part:
+            record["record_name"] = unit.name
+            record["part"] = {"number": unit.number, "count": unit.count, "start": unit.start, "end": unit.end}
         if self.step == "reviewer":
-            analyst = load_record(self.analyst_out, aid)
+            analyst = load_record(self.analyst_out, unit.aid)
             record["analyst_sha256"] = result_sha256(analyst["result"])
         return record
 
-    def base_messages(self, art: dict, text: str) -> tuple[list[dict], dict | None]:
+    def folder(self, record: dict) -> Path:
+        return self.out / "parts" if "part" in record else self.out
+
+    def save(self, record: dict) -> None:
+        save_record(self.folder(record), record)
+
+    def tally(self, record: dict, what: str, n: int = 1) -> None:
+        """Count an outcome, for a part ("part accepted") or an article ("accepted")."""
+        self.count(("part " if "part" in record else "") + what, n)
+
+    def base_messages(self, unit: Unit, text: str) -> tuple[list[dict], dict | None]:
+        art = unit.art
         values = {"periodical": art["periodical"], "issue_date": art["issue_date"],
-                  "article_id": art["article_id"], "heading": art["heading"] or "(none)", "text": text}
+                  "article_id": art["article_id"], "heading": art["heading"] or "(none)",
+                  "text": text[unit.start:unit.end] if unit.is_part else text}
+        if unit.is_part:
+            values.update(part_number=str(unit.number), part_count=str(unit.count),
+                          context=parts.context(text, unit.start, *self.context_chars))
         analyst_result = None
         if self.step == "reviewer":
             analyst_result = load_record(self.analyst_out, art["article_id"])["result"]
+            if unit.is_part:
+                analyst_result = parts.part_of_analyst(analyst_result, unit.number)
             values["statements_json"] = checks.reviewer_input(analyst_result)
-        return self.prompt.render(**values), analyst_result
+        return self.prompt.render(part=unit.is_part, **values), analyst_result
 
-    def check(self, raw: str | None, text: str, analyst_result: dict | None) -> checks.CheckResult:
+    def check(self, raw: str | None, text: str, analyst_result: dict | None,
+              span: tuple[int, int] | None = None) -> checks.CheckResult:
         if self.step == "analyst":
-            return checks.check_analyst(raw, text, self.prompt.schema, self.tolerance)
+            return checks.check_analyst(raw, text, self.prompt.schema, self.tolerance, span)
         return checks.check_review(raw, analyst_result, self.prompt.schema)
 
-    def process(self, art: dict, record: dict | None) -> None:
+    def work(self, unit: Unit, record: dict | None) -> None:
+        """Process one unit; after the last part of a long article, join the parts."""
+        self.process(unit, record)
+        if unit.is_part:
+            self.join(unit)
+
+    def process(self, unit: Unit, record: dict | None) -> None:
         if self.stop.is_set():
             return
-        aid = art["article_id"]
-        text = read_text(self.corpus, art)
-        record = record or self.new_record(aid)
+        aid, span = unit.name, unit.span
+        text = read_text(self.corpus, unit.art)
+        record = record or self.new_record(unit)
         record["run_ids"].append(self.run_id)
-        base, analyst_result = self.base_messages(art, text)
+        base, analyst_result = self.base_messages(unit, text)
 
         if self.step == "reviewer" and checks.statement_count(analyst_result) == 0:
             # Nothing to review: recorded as accepted with no actions, no request sent.
             record.update(status="accepted", sent=False, result=checks.apply_review(analyst_result, []),
                           prompt_version=self.prompt.version, model=None)
-            save_record(self.out, record)
-            self.count("accepted without request (no statements to review)")
+            self.save(record)
+            self.tally(record, "accepted without request (no statements to review)")
             return
 
         # A new round: earlier attempts (from a run that stopped, or failed ones
@@ -251,29 +374,29 @@ class StepRunner:
         else:
             round_start = record.get("round_start", 0)
         record["round_start"] = round_start
-        self.count("articles processed")
+        self.count("parts processed" if unit.is_part else "articles processed")
         while True:
             last = record["attempts"][-1] if len(record["attempts"]) > round_start else None
             if last is not None and "accepted" not in last:
                 # An answer saved but not yet checked (the run stopped in between):
                 # check it now instead of paying for a new one.
-                self.evaluate(last, text, analyst_result)
-                save_record(self.out, record)
+                self.evaluate(last, text, analyst_result, span)
+                self.save(record)
             if last is not None and last["accepted"]:
-                self.accept(record, last, text, analyst_result)
+                self.accept(record, last, text, analyst_result, span)
                 return
             if self.repeated(record, round_start):
                 # Asking again would most likely bring the same answer (D-027).
                 record.update(status="failed", errors=[REPEATED] + last["errors"])
-                save_record(self.out, record)
-                self.count("failed")
+                self.save(record)
+                self.tally(record, "failed")
                 self.count("retries stopped (answer repeated)")
                 self.info(f"{aid}: FAILED: {REPEATED}")
                 return
             if len(record["attempts"]) - round_start >= self.max_attempts:
                 break
             if self.stop.is_set():
-                save_record(self.out, record)
+                self.save(record)
                 return
             messages = list(base)
             if last is not None:
@@ -293,7 +416,7 @@ class StepRunner:
             except LLMError as e:
                 self.fatal = self.fatal or str(e)  # keep the first reason (e.g. Ctrl-C)
                 self.stop.set()
-                save_record(self.out, record)
+                self.save(record)
                 self.info(f"{aid}: stopping the run: {e}")
                 return
             with self.lock:
@@ -303,22 +426,22 @@ class StepRunner:
             if reply.reasoning:
                 attempt["reasoning"] = reply.reasoning
             record["attempts"].append(attempt)
-            save_record(self.out, record)  # the paid answer is safe before anything else happens
+            self.save(record)  # the paid answer is safe before anything else happens
             self.count("requests")
             self.count("prompt tokens", reply.usage.get("prompt_tokens", 0))
             self.count("completion tokens", reply.usage.get("completion_tokens", 0))
             details = reply.usage.get("completion_tokens_details") or {}
             self.count("reasoning tokens (part of completion)", details.get("reasoning_tokens") or 0)
-            self.evaluate(attempt, text, analyst_result)
-            save_record(self.out, record)
+            self.evaluate(attempt, text, analyst_result, span)
+            self.save(record)
             if not attempt["accepted"]:
                 errors = attempt["errors"]
                 self.info(f"{aid}: attempt {attempt['attempt']} rejected: {'; '.join(errors[:3])}"
                           + (" …" if len(errors) > 3 else ""))
 
         record.update(status="failed", errors=record["attempts"][-1]["errors"])
-        save_record(self.out, record)
-        self.count("failed")
+        self.save(record)
+        self.tally(record, "failed")
         self.info(f"{aid}: FAILED after {self.max_attempts} attempts")
 
     def too_slow(self, record: dict, requested_at: str, message: str) -> None:
@@ -326,13 +449,13 @@ class StepRunner:
         marked failed at once, since asking again would take as long and fail
         the same way; `--retry-failed` tries it again later. Only after
         `max_slow_in_row` such failures in a row does the run stop."""
-        aid = record["article_id"]
+        aid = record.get("record_name") or record["article_id"]
         record.setdefault("slow_failures", []).append({"requested_at": requested_at, "failed_at": now(),
                                                        "model": self.model, "error": message})
         record.update(status="failed", errors=[message])
-        save_record(self.out, record)
-        self.count("failed")
-        self.count("failed (too slow for the service)")
+        self.save(record)
+        self.tally(record, "failed")
+        self.tally(record, "failed (too slow for the service)")
         self.info(f"{aid}: FAILED: {message}")
         with self.lock:
             self.slow_in_row += 1
@@ -340,6 +463,26 @@ class StepRunner:
                 self.fatal = self.fatal or (f"{self.slow_in_row} articles in a row were too slow for the service; "
                                             "turn reasoning down or choose a faster model in config.yaml")
                 self.stop.set()
+
+    def join(self, unit: Unit) -> None:
+        """When every part of an article is done (accepted or failed), write the
+        article's record from the parts' records (D-034). The article is
+        accepted only if all its parts are; a failed article lists the failed
+        parts, and `--retry-failed` sends only those again."""
+        with self.join_lock:
+            records = [load_record(self.out / "parts", parts.part_name(unit.aid, k, unit.count))
+                       for k in range(1, unit.count + 1)]
+            if any(r is None or r["status"] not in ("accepted", "failed") for r in records):
+                return  # a part is still to be done (another thread, or a later run)
+            record = join_records(self.step, records, load_record(self.analyst_out, unit.aid)
+                                  if self.step == "reviewer" else None)
+            save_record(self.out, record)
+            if record["status"] == "accepted":
+                self.count("accepted")
+                self.count("accepted (long articles, in parts)")
+            else:
+                self.count("failed")
+                self.info(f"{unit.aid}: FAILED: {'; '.join(record['errors'][:3])}")
 
     def interrupted(self, pool: ThreadPoolExecutor) -> None:
         """Ctrl-C: send no new request, stop any pause before a retry, and let
@@ -379,9 +522,10 @@ class StepRunner:
                 + f"\n\n[… the rest of this answer ({len(text) - self.echo_chars} more characters) is left out: "
                   "it was cut off at the length limit …]")
 
-    def evaluate(self, attempt: dict, text: str, analyst_result: dict | None) -> checks.CheckResult:
+    def evaluate(self, attempt: dict, text: str, analyst_result: dict | None,
+                 span: tuple[int, int] | None = None) -> checks.CheckResult:
         """Run the checks on one stored answer and note the outcome in the attempt."""
-        result = self.check(attempt["raw_response"], text, analyst_result)
+        result = self.check(attempt["raw_response"], text, analyst_result, span)
         if attempt.get("finish_reason") == "length":
             result.errors.insert(0, "the answer was cut off because it reached the length limit")
         attempt.update(errors=result.errors, flags=result.flags, accepted=not result.errors)
@@ -389,8 +533,9 @@ class StepRunner:
             self.count(f"check failed: {error_kind(e)}")
         return result
 
-    def accept(self, record: dict, attempt: dict, text: str, analyst_result: dict | None) -> None:
-        result = self.check(attempt["raw_response"], text, analyst_result)  # pure, so same outcome
+    def accept(self, record: dict, attempt: dict, text: str, analyst_result: dict | None,
+               span: tuple[int, int] | None = None) -> None:
+        result = self.check(attempt["raw_response"], text, analyst_result, span)  # pure, so same outcome
         record.update(status="accepted", result=result.result, flags=result.flags, errors=[],
                       prompt_version=attempt["prompt_version"], prompt_sha256=attempt["prompt_sha256"],
                       model=attempt["model_requested"], model_reported=attempt.get("model_reported"),
@@ -398,8 +543,8 @@ class StepRunner:
                       accepted_at=attempt["answered_at"])
         if self.step == "reviewer":
             record["sent"] = True
-        save_record(self.out, record)
-        self.count("accepted")
+        self.save(record)
+        self.tally(record, "accepted")
         self.count("flags", len(result.flags))
         if self.step == "analyst":
             self.count("statements", checks.statement_count(result.result))
@@ -408,7 +553,7 @@ class StepRunner:
                 for e in item["errors"]:
                     self.count(f"item failed: {error_kind(e)}")
             if result.result["failed"]:
-                self.info(f"{record['article_id']}: accepted; {len(result.result['failed'])} item(s) set aside: "
+                self.info(f"{record.get('record_name') or record['article_id']}: accepted; {len(result.result['failed'])} item(s) set aside: "
                           + "; ".join(item["errors"][0] for item in result.result["failed"][:3])
                           + (" …" if len(result.result["failed"]) > 3 else ""))
         else:
@@ -419,14 +564,17 @@ class StepRunner:
     def run(self, articles: list[dict], retry_failed: bool = False, limit: int | None = None) -> dict:
         self.info(f"{self.step}: model {self.model}, prompt {self.prompt.version} "
                   f"(sha256 {self.prompt.sha256[:12]}), corpus {self.version}, output {self.out}")
-        work = self.todo(articles, retry_failed)
+        groups = self.todo(articles, retry_failed)
         if limit is not None:
-            work = work[:limit]
-        self.info(f"{len(work)} article(s) to process")
+            groups = groups[:limit]
+        work = [unit for group in groups for unit in group]
+        n_parts = sum(1 for unit, _ in work if unit.is_part)
+        self.info(f"{len(groups)} article(s) to process"
+                  + (f", {n_parts} request(s) of them for parts of long articles" if n_parts else ""))
         workers = self.cfg["annotation"].get("concurrency", 1)
         pool = ThreadPoolExecutor(max_workers=workers)
         try:
-            for future in [pool.submit(self.process, art, rec) for art, rec in work]:
+            for future in [pool.submit(self.work, unit, rec) for unit, rec in work]:
                 future.result()  # re-raise programming errors
         except KeyboardInterrupt:
             self.interrupted(pool)
@@ -443,6 +591,43 @@ class StepRunner:
             "model": self.model, "settings": self.settings, "max_attempts": self.max_attempts,
             "log": str(self.log.path), **summary}, ensure_ascii=False, indent=1) + "\n")
         return summary
+
+
+def join_records(step: str, records: list[dict], analyst: dict | None = None) -> dict:
+    """The record of a long article, joined from the records of its parts (all
+    done, in order). Pure: checkreport.py rebuilds it to confirm the stored one."""
+    first = records[0]
+    record = {"article_id": first["article_id"], "step": step, "corpus_version": first["corpus_version"],
+              "parts": [{"record": r["record_name"], **r["part"], "status": r["status"]} for r in records],
+              "attempts": [attempt_summary(a, r["part"]["number"]) for r in records for a in r["attempts"]],
+              "run_ids": sorted({i for r in records for i in r["run_ids"]}),
+              "flags": [], "errors": [], "result": None}
+    if step == "reviewer":
+        record["analyst_sha256"] = first["analyst_sha256"]
+    failed = [r for r in records if r["status"] != "accepted"]
+    if failed:
+        record["status"] = "failed"
+        record["errors"] = [f"part {r['part']['number']} of {r['part']['count']}: {e}"
+                            for r in failed for e in r["errors"]]
+        return record
+    sent = [r for r in records if r.get("sent", True)]
+    model_of = sent[0] if sent else first
+    record.update(status="accepted", prompt_version=model_of.get("prompt_version"),
+                  prompt_sha256=model_of.get("prompt_sha256"), model=model_of.get("model"),
+                  model_reported=model_of.get("model_reported"), settings=model_of.get("settings"),
+                  accepted_at=max((r["accepted_at"] for r in sent), default=None))
+    versions = {(r.get("prompt_sha256"), r.get("model")) for r in sent}
+    if len(versions) > 1:
+        record["mixed_versions"] = sorted(f"{m} / {sha and sha[:12]}" for sha, m in versions)
+    if step == "analyst":
+        record["result"], record["flags"] = parts.join_analyst(
+            [{"part": r["part"]["number"], "start": r["part"]["start"], "end": r["part"]["end"],
+              "result": r["result"], "flags": r["flags"]} for r in records])
+    else:
+        record["sent"] = bool(sent)
+        record["result"] = checks.apply_review(analyst["result"],
+                                               [a for r in records for a in accepted_actions(r)])
+    return record
 
 
 def error_kind(message: str) -> str:

@@ -19,15 +19,23 @@ class Prompt:
     system: str
     user_template: str
     schema: dict
-    sha256: str  # checksum of the three files, recorded with every request
+    sha256: str  # checksum of the prompt files, recorded with every request
+    part_template: str | None = None  # user-part.md: the message for one part of a long article (D-034)
 
-    def render(self, **values: str) -> list[dict]:
-        """The messages for one request: the instructions and the filled-in user message."""
-        names = set(_PLACEHOLDER.findall(self.user_template))
+    def render(self, part: bool = False, **values: str) -> list[dict]:
+        """The messages for one request: the instructions and the filled-in user
+        message (for one part of a long article if `part`)."""
+        template = self.user_template
+        if part:
+            if self.part_template is None:
+                raise SystemExit(f"prompt {self.step}/{self.version} has no user-part.md, so it cannot be "
+                                 "used for long articles sent in parts (D-034)")
+            template = self.part_template
+        names = set(_PLACEHOLDER.findall(template))
         missing = names - values.keys()
         if missing:
             raise ValueError(f"no value for {sorted(missing)} in the {self.step} prompt")
-        user = _PLACEHOLDER.sub(lambda m: values[m.group(1)], self.user_template)
+        user = _PLACEHOLDER.sub(lambda m: values[m.group(1)], template)
         return [{"role": "system", "content": self.system}, {"role": "user", "content": user}]
 
 
@@ -36,11 +44,13 @@ def load_prompt(step: str, version: str, root: Path = PROMPTS_DIR) -> Prompt:
     if not folder.is_dir():
         raise SystemExit(f"prompt folder {folder} does not exist")
     files = [folder / "system.md", folder / "user.md", folder / "output.schema.json"]
+    part = folder / "user-part.md"  # optional; older versions have none
     digest = hashlib.sha256()
-    for f in files:
+    for f in files + ([part] if part.exists() else []):
         digest.update(f.read_bytes())
     return Prompt(step=step, version=version,
                   system=files[0].read_text(encoding="utf-8"),
                   user_template=files[1].read_text(encoding="utf-8"),
                   schema=json.loads(files[2].read_text(encoding="utf-8")),
-                  sha256=digest.hexdigest())
+                  sha256=digest.hexdigest(),
+                  part_template=part.read_text(encoding="utf-8") if part.exists() else None)

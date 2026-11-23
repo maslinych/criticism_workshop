@@ -60,6 +60,7 @@ def cfg(tmp_path):
         cfg["annotation"][step]["model"] = "fake-model"
     cfg["annotation"]["max_retries"] = 2
     cfg["annotation"]["concurrency"] = 1
+    cfg["annotation"]["max_part_chars"] = None  # whole articles; tests/test_parts.py covers parts
     return cfg
 
 
@@ -78,7 +79,7 @@ def test_accepted_answer_is_stored_with_provenance(cfg):
     rec = record(cfg)
     assert rec["status"] == "accepted" and rec["accepted_attempt"] == 1
     assert rec["corpus_version"] == "corpus-v1.0 sample"
-    assert rec["prompt_version"] == "v1" and len(rec["prompt_sha256"]) == 64
+    assert rec["prompt_version"] == cfg["annotation"]["analyst"]["prompt_version"] and len(rec["prompt_sha256"]) == 64
     assert rec["model"] == "fake-model"
     assert rec["attempts"][0]["raw_response"] == good_answer()
     assert rec["attempts"][0]["usage"]["prompt_tokens"] == 100

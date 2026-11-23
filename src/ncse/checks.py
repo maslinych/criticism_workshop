@@ -129,7 +129,7 @@ def statement_level(statement: dict, skip_deleted: bool = False) -> str:
 
 
 def check_analyst(raw: str | None, text: str, schema: dict,
-                  tolerance: Tolerance = Tolerance()) -> CheckResult:
+                  tolerance: Tolerance = Tolerance(), span: tuple[int, int] | None = None) -> CheckResult:
     """Check one analyst answer for one article (stage 5).
 
     `text` is the article's text file, unchanged. Problems with the answer as a
@@ -142,7 +142,12 @@ def check_analyst(raw: str | None, text: str, schema: dict,
     `result["passages"]` holds the accepted passages with short identifiers
     (p01, p01-s01) numbered over the whole answer, so that failed items keep
     their place; the position and exact source text of each quote and
-    evaluative expression; how they matched (D-028); and the statement levels."""
+    evaluative expression; how they matched (D-028); and the statement levels.
+
+    For one part of a long article (D-034), `span` gives the part's (start,
+    end) in `text`: quotes must lie in the part, and their positions are
+    counted within the part (parts.join_analyst shifts them). Values marked
+    observed are still looked for in the whole article."""
     check = CheckResult()
     obj = parse_answer(raw, check)
     if obj is None:
@@ -152,6 +157,8 @@ def check_analyst(raw: str | None, text: str, schema: dict,
     if check.errors:
         return check
 
+    part = text if span is None else text[span[0]:span[1]]
+    where_found = "the article" if span is None else "this part of the article"
     passages, failed = [], []
     seen_quotes: dict[str, str] = {}
     seen_statements: dict[str, str] = {}
@@ -159,15 +166,15 @@ def check_analyst(raw: str | None, text: str, schema: dict,
     for pi, passage in enumerate(obj["passages"], start=1):
         pid = f"p{pi:02d}"
         quote = passage["quote"]
-        found = match(text, quote, tolerance)
+        found = match(part, quote, tolerance)
         if found is None:
             failed.append({"where": pid, "item": "passage", "statements": len(passage["statements"]),
-                           "errors": [f"passage {pid}: the quote does not match any passage of the article, "
+                           "errors": [f"passage {pid}: the quote does not match any passage of {where_found}, "
                                       "even allowing for punctuation, capitals, line breaks and a few "
                                       f"changed characters: \"{_short(quote)}\""],
                            "answer": passage})
             continue
-        source = text[found.start:found.end]
+        source = part[found.start:found.end]
         if found.count > 1:
             check.flags.append({"where": pid, "flag": "ambiguous_quote",
                                 "detail": f"the quote occurs {found.count} times; the first is recorded"})
